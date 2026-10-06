@@ -18,6 +18,7 @@ async function list(el) {
     ${data.map(l => `<tr><td>${l.level} · ${LEVELS[l.level]}</td><td>${esc(l.title)}</td><td>${esc(LANGS[l.language] ?? l.language)}</td>
       <td><a href="#/play/${l.id}">Open</a> · <a href="#/lessons/${l.id}">Edit</a></td></tr>`).join('')}
     </tbody></table>${data.length ? '' : '<p class="muted">No lessons yet.</p>'}`
+  ;(await import('./drop.js')).mountDrop($('#drop', el), openDraft)
 }
 
 async function editor(el, id) {
