@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Basa</title>
+<style>
+  :root { --bg:#fffdf7; --fg:#1f2937; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --ok:#15803d; --bad:#b91c1c; }
+  * { box-sizing: border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.5 system-ui, sans-serif }
+  header { display:flex; gap:16px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap }
+  header b { font-size:20px; margin-right:auto }
+  main { max-width:880px; margin:0 auto; padding:16px }
+  a { color:var(--accent) }
+  button, input, select, textarea { font:inherit; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:inherit }
+  button { cursor:pointer } button.primary { background:var(--accent); color:#fff; border-color:var(--accent) }
+  button:disabled { opacity:.5; cursor:default }
+  table { width:100%; border-collapse:collapse } td, th { padding:8px; border-bottom:1px solid var(--line); text-align:left }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0 }
+  .muted { color:var(--muted) } .note { background:#fef3c7; padding:8px 12px; border-radius:8px }
+  .big { font-size:clamp(28px, 7vw, 48px); line-height:1.4 }
+  .item { display:inline-block; margin:8px 12px; cursor:pointer } .item img { max-width:220px; border-radius:12px; display:block }
+  .w { display:inline-block; margin:0 6px } .ok { color:var(--ok) } .bad { color:var(--bad); text-decoration:underline wavy }
+  .drop { border:2px dashed #cbd5e1; border-radius:12px; padding:16px; text-align:center }
+</style>
+</head>
+<body>
+<header><b>📖 Basa</b><nav class="row"><a href="#/">Classes</a><a href="#/lessons">Lessons</a><button id="out" hidden>Sign out</button></nav></header>
+<main id="app">Loading…</main>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
