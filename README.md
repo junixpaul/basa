@@ -8,9 +8,11 @@ Free stack, no build step: static HTML and ES modules, Supabase Free, and librar
 
 1. Create a free project at supabase.com. In the SQL editor, run `supabase/migrations/0001_init.sql`.
 2. Under Authentication → URL Configuration, add your site URL (and `http://localhost:5173` for local work).
-3. Put the project URL and anon key in `config.js`.
-4. Run locally with `npm run dev` (Python static server), then open http://localhost:5173 in **Chrome or Edge**.
-5. Deploy by importing the repo into Vercel (Hobby). No build command; the output directory is `.`
+3. Under Authentication → Sign In / Providers, turn on **Google** and **Facebook** and paste each app's client ID and secret. In the Google Cloud console and the Meta developer app, set the redirect URI to `https://YOUR-PROJECT.supabase.co/auth/v1/callback`. Email sign-in links work without this step.
+4. Create the administrator: Authentication → Users → **Add user** → **Create new user**. Enter the admin email and a strong password, and tick **Auto Confirm User**. The admin then logs in with email + password, and stays signed in on that device until they sign out. Teachers can set a password the same way, or keep using Google, Facebook or the email link.
+5. Put the project URL and anon key in `config.js`.
+6. Run locally with `npm run dev` (Python static server), then open http://localhost:5173 in **Chrome or Edge**.
+7. Deploy by importing the repo into Vercel (Hobby). No build command; the output directory is `.`
 
 ## Bisaya voice (optional)
 

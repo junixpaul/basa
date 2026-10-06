@@ -8,12 +8,18 @@ export async function render(el, [id]) {
     supabase.from('lessons').select('*').eq('id', id).single(),
     supabase.from('lesson_items').select('*').eq('lesson_id', id).order('position'),
   ])
+  if (!lesson) {
+    el.innerHTML = `<h1>Lesson not found</h1><p class="muted">It may have been deleted, or it belongs to another account.</p>
+      <div class="row"><a href="#/lessons"><button>All lessons</button></a> <a href="#/lessons/new"><button class="primary">+ New lesson</button></a></div>`
+    return
+  }
   const paths = items.flatMap(i => [i.image_path, i.audio_path]).filter(Boolean)
   const { data: signed } = paths.length ? await supabase.storage.from('lesson-images').createSignedUrls(paths, 3600) : { data: [] }
   const url = Object.fromEntries((signed ?? []).map(s => [s.path, s.signedUrl]))
 
   el.innerHTML = `<p class="muted">Level ${lesson.level} · ${LEVELS[lesson.level]}</p><h1>${esc(lesson.title)}</h1>
-    <div class="row"><button class="primary" id="all">▶ Read all</button><a href="#/lessons/${id}">Edit</a></div>
+    <div class="row"><button class="primary" id="all">▶ Read all</button><a href="#/lessons/${id}"><button>Edit</button></a>
+      <span style="margin-left:auto"><a href="#/lessons"><button>All lessons</button></a> <a href="#/lessons/new"><button>+ New lesson</button></a></span></div>
     <p id="note" class="note" hidden></p>
     <div class="big">${items.map((it, i) => `<button class="item" data-i="${i}" style="border:0;background:none" aria-label="Hear: ${esc(it.text)}">
       ${it.image_path ? `<img src="${esc(url[it.image_path])}" alt="${esc(it.text)}">` : esc(it.text)}</button>`).join('')}</div>`

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import { LEVELS } from '../lib/levels.js'
 import { synthCeb } from '../lib/speech.js'
-import { esc, $ } from '../app.js'
+import { esc, $, armed } from '../app.js'
 
 const LANGS = { 'en-US': 'English', 'fil-PH': 'Tagalog / Filipino', 'ceb-PH': 'Bisaya / Cebuano' }
 let pending = null // draft handed over from the file drop (Task 7)
@@ -63,8 +63,8 @@ async function editor(el, id) {
   }
   pics.forEach(addPic)
   $('#addPic', el).onclick = () => addPic()
-  $('#del', el)?.addEventListener('click', async () => {
-    if (!confirm('Delete this lesson?')) return
+  $('#del', el)?.addEventListener('click', async e => {
+    if (!armed(e.currentTarget)) return
     await supabase.from('lessons').delete().eq('id', id); location.hash = '#/lessons'
   })
 
