@@ -21,7 +21,7 @@ export function speak(text, lang) {
   u.rate = 0.85
   speechSynthesis.cancel()
   speechSynthesis.speak(u)
-  return { fallback }
+  return { fallback, ended: new Promise(r => { u.onend = u.onerror = r }) }
 }
 
 // Resolves with everything heard until stop (signal abort), silence end, or maxMs.

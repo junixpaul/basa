@@ -1,0 +1,31 @@
+import { supabase } from '../lib/supabase.js'
+import { LEVELS } from '../lib/levels.js'
+import { speak } from '../lib/speech.js'
+import { esc, $ } from '../app.js'
+
+export async function render(el, [id]) {
+  const [{ data: lesson }, { data: items }] = await Promise.all([
+    supabase.from('lessons').select('*').eq('id', id).single(),
+    supabase.from('lesson_items').select('*').eq('lesson_id', id).order('position'),
+  ])
+  const paths = items.flatMap(i => [i.image_path, i.audio_path]).filter(Boolean)
+  const { data: signed } = paths.length ? await supabase.storage.from('lesson-images').createSignedUrls(paths, 3600) : { data: [] }
+  const url = Object.fromEntries((signed ?? []).map(s => [s.path, s.signedUrl]))
+
+  el.innerHTML = `<p class="muted">Level ${lesson.level} · ${LEVELS[lesson.level]}</p><h1>${esc(lesson.title)}</h1>
+    <div class="row"><button class="primary" id="all">▶ Read all</button><a href="#/lessons/${id}">Edit</a></div>
+    <p id="note" class="note" hidden></p>
+    <div class="big">${items.map((it, i) => `<button class="item" data-i="${i}" style="border:0;background:none" aria-label="Hear: ${esc(it.text)}">
+      ${it.image_path ? `<img src="${esc(url[it.image_path])}" alt="${esc(it.text)}">` : esc(it.text)}</button>`).join('')}</div>`
+
+  let audio
+  const say = it => new Promise(done => {
+    audio?.pause(); speechSynthesis.cancel()
+    if (it.audio_path && url[it.audio_path]) { audio = new Audio(url[it.audio_path]); audio.onended = done; audio.onerror = done; return audio.play().catch(done) }
+    const { fallback, ended } = speak(it.text, lesson.language)
+    if (fallback) { const n = $('#note', el); n.hidden = false; n.textContent = `No ${lesson.language} voice on this device; using the closest available voice.` }
+    ended.then(done)
+  })
+  el.querySelectorAll('[data-i]').forEach(b => { b.onclick = () => say(items[+b.dataset.i]) })
+  $('#all', el).onclick = async () => { for (const it of items) { if (!el.isConnected) break; await say(it); await new Promise(r => setTimeout(r, 400)) } }
+}
