@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bisaya spike</title>
+<style>body{font:18px system-ui;max-width:640px;margin:16px auto;padding:0 16px}button{font-size:18px;margin:4px}pre{white-space:pre-wrap;background:#eee;padding:8px}</style>
+<h1>Bisaya spike</h1>
+<p>Read a Bisaya sentence after pressing a button. Compare transcripts.</p>
+<button onclick="rec('ceb-PH')">Listen ceb-PH</button>
+<button onclick="rec('fil-PH')">Listen fil-PH</button>
+<input id="m" size="28" placeholder="your-hf-user/mms-tts-ceb-onnx"><button onclick="tts()">Speak "Maayong buntag" (MMS)</button>
+<pre id="out"></pre>
+<script type="module">
+const out = document.getElementById('out')
+const log = s => out.textContent += s + '\n'
+window.rec = lang => {
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!R) return log('No SpeechRecognition in this browser')
+  const r = new R(); r.lang = lang; r.continuous = true; r.interimResults = false
+  let t = ''; r.onresult = e => { for (const x of e.results) t = [...e.results].map(y => y[0].transcript).join(' ') }
+  r.onerror = e => log(lang + ' error: ' + e.error)
+  r.onend = () => log(lang + ': ' + (t || '(nothing)'))
+  r.start(); log(lang + ' listening… press again or stop talking'); setTimeout(() => r.stop(), 10000)
+}
+window.tts = async () => {
+  log('loading model (first time ~30 MB)…')
+  const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3')
+  try {
+    const s = await pipeline('text-to-speech', document.getElementById('m').value)
+    const { audio, sampling_rate } = await s('Maayong buntag')
+    const ctx = new AudioContext(); const b = ctx.createBuffer(1, audio.length, sampling_rate)
+    b.copyToChannel(audio, 0); const n = ctx.createBufferSource(); n.buffer = b; n.connect(ctx.destination); n.start()
+    log('played')
+  } catch (e) { log('TTS failed: ' + e.message) }
+}
+</script>
