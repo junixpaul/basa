@@ -21,4 +21,9 @@ select t.is((select count(*)::int from attempts), 4, 'every attempt recorded');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', true);
 select t.is((select count(*)::int from students), 0, 'other teacher sees no students');
 select t.is((select count(*)::int from lessons), 0, 'other teacher sees no lessons');
+do $$ begin
+  perform record_attempt('20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 1.0, true, '{}');
+  raise exception 'FAIL: other teacher could record an attempt';
+exception when insufficient_privilege then raise notice 'ok - other teacher cannot record attempts';
+end $$;
 rollback;

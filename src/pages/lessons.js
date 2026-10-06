@@ -97,8 +97,6 @@ export async function saveLesson({ id, title, level, language, items }, onProgre
   const row = { title, level, language }
   const lesson = ok(id ? await supabase.from('lessons').update(row).eq('id', id).select().single()
                        : await supabase.from('lessons').insert(row).select().single())
-  // ponytail: replace-all items on edit; old audio files stay in Storage (clean up if the 1 GB free limit gets close)
-  if (id) ok(await supabase.from('lesson_items').delete().eq('lesson_id', id))
   const rows = []
   for (const [position, it] of items.entries()) {
     let image_path = it.image_path ?? null
@@ -110,6 +108,9 @@ export async function saveLesson({ id, title, level, language, items }, onProgre
     rows.push({ lesson_id: lesson.id, position, text: it.text, image_path })
   }
   const saved = ok(await supabase.from('lesson_items').insert(rows).select())
+  // Old items are removed only after the new ones are safely in, so a failed save never empties a lesson.
+  // ponytail: old audio files stay in Storage (clean up if the 1 GB free limit gets close)
+  if (id) ok(await supabase.from('lesson_items').delete().eq('lesson_id', id).not('id', 'in', `(${saved.map(i => i.id).join(',')})`))
   if (language === 'ceb-PH') {
     for (const [n, it] of saved.entries()) {
       onProgress(n + 1, saved.length)

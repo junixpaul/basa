@@ -65,6 +65,11 @@ create function record_attempt(p_student uuid, p_lesson uuid, p_score real, p_pa
 returns int language plpgsql security invoker as $$
 declare new_level int;
 begin
+  -- security invoker: RLS hides other teachers' rows, so this rejects them
+  if not exists (select 1 from students where id = p_student)
+     or not exists (select 1 from lessons where id = p_lesson) then
+    raise exception 'student or lesson not found' using errcode = 'insufficient_privilege';
+  end if;
   insert into attempts (student_id, lesson_id, score, passed, result)
     values (p_student, p_lesson, p_score, p_passed, p_result);
   update students s set level = s.level + 1
