@@ -1,47 +1,131 @@
 import { supabase } from '../lib/supabase.js'
 import { LEVELS, MAX_LEVEL, levelLabel } from '../lib/levels.js'
-import { esc, $ } from '../app.js'
+import { esc, $, armed } from '../app.js'
 
+const levelOpts = (cur = 1) => Array.from({ length: MAX_LEVEL }, (_, i) => i + 1)
+  .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n < MAX_LEVEL ? `Level ${n} · ${LEVELS[n]}` : 'Finished'}</option>`).join('')
+const remembered = () => { try { return localStorage.getItem('class') } catch { return null } }
+const remember = id => { try { localStorage.setItem('class', id) } catch {} }
+
+// One class at a time (picked from a dropdown), so teachers never mix up sections.
 export async function render(el) {
-  const [{ data: sections }, { data: students }, { data: lessons }] = await Promise.all([
-    supabase.from('sections').select('*').order('name'),
-    supabase.from('students').select('*').order('name'),
+  const [{ data: sections }, { data: lessons }] = await Promise.all([
+    supabase.from('sections').select('id, name').order('name'),
     supabase.from('lessons').select('id, level').order('created_at', { ascending: false }),
   ])
+  const setupBtn = label => `<a href="#/setup"><button>${label}</button></a>`
+  if (!sections.length) {
+    el.innerHTML = `<h1>Classes</h1><p class="muted">No classes yet. Add a grade level and section first.</p><div class="row">${setupBtn('Open Setup')}</div>`
+    return
+  }
+  const cls = sections.find(s => s.id === remembered()) || sections[0]
+  const { data: students } = await supabase.from('students').select('id, name, level').eq('section_id', cls.id).order('name')
   const newest = lv => lessons.find(l => l.level === lv)
-  const levelOpts = cur => Array.from({ length: MAX_LEVEL }, (_, i) => i + 1)
-    .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n < MAX_LEVEL ? `${n} · ${LEVELS[n]}` : 'Finished'}</option>`).join('')
+  const others = sections.filter(s => s.id !== cls.id)
 
   el.innerHTML = `<h1>Classes</h1>
-    <form id="addSec" class="row"><input required name="name" placeholder="New section, e.g. Grade 1 – Sampaguita" aria-label="Section name"><button class="primary">Add section</button></form>
-    ${sections.map(s => `<section data-sec="${s.id}">
-      <div class="row"><h2 style="margin:16px 0 0">${esc(s.name)}</h2>
-        <button data-rename>Rename</button><button data-delsec>Delete</button></div>
-      <table><thead><tr><th>Student</th><th>Level</th><th></th></tr></thead><tbody>
-      ${students.filter(st => st.section_id === s.id).map(st => {
-        const l = st.level < MAX_LEVEL && newest(st.level)
-        return `<tr data-stu="${st.id}"><td>${esc(st.name)}</td>
-          <td><select data-level aria-label="Level of ${esc(st.name)}">${levelOpts(st.level)}</select> <span class="muted">${esc(levelLabel(st.level))}</span></td>
-          <td>${l ? `<a href="#/assess/${st.id}/${l.id}"><button class="primary">Read</button></a>`
-                 : `<button disabled>${st.level < MAX_LEVEL ? 'No lesson for this level yet' : 'Finished'}</button>`}
-            <button data-delstu aria-label="Remove ${esc(st.name)}">✕</button></td></tr>`
-      }).join('')}
-      </tbody></table>
-      <form data-addstu class="row"><input required name="name" placeholder="Student name" aria-label="Student name"><button>Add student</button></form>
-    </section>`).join('') || '<p class="muted">No sections yet.</p>'}`
+    <div class="row">
+      <label for="cls">Class</label>
+      <select id="cls">${sections.map(s => `<option value="${s.id}" ${s.id === cls.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+      <span style="margin-left:auto">${setupBtn('Manage classes')}</span>
+    </div>
 
-  const reload = () => render(el)
-  const run = async q => { const { error } = await q; if (error) alert(error.message); reload() }
-  $('#addSec', el).onsubmit = e => { e.preventDefault(); run(supabase.from('sections').insert({ name: e.target.name.value.trim() })) }
-  el.querySelectorAll('section[data-sec]').forEach(sec => {
-    const id = sec.dataset.sec
-    $('[data-rename]', sec).onclick = () => { const n = prompt('New name'); if (n?.trim()) run(supabase.from('sections').update({ name: n.trim() }).eq('id', id)) }
-    $('[data-delsec]', sec).onclick = () => confirm('Delete this section and all its students?') && run(supabase.from('sections').delete().eq('id', id))
-    $('[data-addstu]', sec).onsubmit = e => { e.preventDefault(); run(supabase.from('students').insert({ section_id: id, name: e.target.name.value.trim() })) }
-  })
+    <form id="add" class="addbox" novalidate>
+      <b>Add students to ${esc(cls.name)}</b>
+      <table><thead><tr><th>Student name</th><th>Starting level</th><th style="width:56px"></th></tr></thead><tbody id="rows"></tbody></table>
+      <p class="muted small" style="margin:0">Press Enter for the next row. Pasting a list of names fills one row each.</p>
+      <div class="row" style="margin:0"><button type="button" id="addRow">+ Add row</button><button class="primary">Save students</button></div>
+    </form>
+    <p id="msg" role="status" aria-live="polite"></p>
+
+    ${students.length ? `
+    <div class="row bulk" id="bulk" hidden>
+      <b id="count"></b>
+      ${others.length ? `<select id="moveTo" aria-label="Move to class"><option value="">Move to class…</option>${others.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>` : ''}
+      <select id="setLevel" aria-label="Set level"><option value="">Set level…</option>${levelOpts(0)}</select>
+      <button id="delSel">Remove</button>
+    </div>
+    <table><thead><tr>
+      <th style="width:40px"><input type="checkbox" id="all" aria-label="Select all students"></th>
+      <th>Student</th><th>Level</th><th></th></tr></thead><tbody>
+    ${students.map(st => {
+      const l = st.level < MAX_LEVEL && newest(st.level)
+      return `<tr data-stu="${st.id}">
+        <td><input type="checkbox" data-pick aria-label="Select ${esc(st.name)}"></td>
+        <td><a href="#/students/${st.id}">${esc(st.name)}</a></td>
+        <td><select data-level aria-label="Level of ${esc(st.name)}">${levelOpts(st.level)}</select></td>
+        <td style="text-align:right">${l ? `<a href="#/assess/${st.id}/${l.id}"><button class="primary">Read</button></a>`
+          : `<span class="muted">${st.level < MAX_LEVEL ? 'No lesson for this level yet' : 'Finished'}</span>`}</td></tr>`
+    }).join('')}
+    </tbody></table>` : `<p class="muted">No students in ${esc(cls.name)} yet.</p>`}`
+
+  const msg = $('#msg', el)
+  const say = (text, kind = '') => { msg.textContent = text; msg.className = kind }
+  const run = async (q, done) => {
+    const { error } = await q
+    if (error) return say(error.message, 'bad')
+    await render(el) // redraw replaces #msg, so report success on the new one
+    if (done) Object.assign($('#msg', el), { textContent: done, className: 'ok' })
+  }
+
+  $('#cls', el).onchange = e => { remember(e.target.value); render(el) }
+
+  // add-students table: one row per student, each with its own starting level
+  const rows = $('#rows', el)
+  const addRow = (name = '', level = +(rows.lastElementChild?.querySelector('select').value || 1)) => {
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td><input aria-label="Student name" placeholder="Juan Dela Cruz" autocomplete="off"></td>
+      <td><select aria-label="Starting level">${levelOpts(level)}</select></td>
+      <td><button type="button" aria-label="Remove row">✕</button></td>`
+    const input = $('input', tr)
+    input.value = name
+    input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addRow().focus() } }
+    input.onpaste = e => { // a pasted list becomes one row per name
+      const names = e.clipboardData.getData('text').split(/\r?\n/).map(n => n.trim()).filter(Boolean)
+      if (names.length < 2) return
+      e.preventDefault()
+      input.value = names.shift()
+      names.forEach(n => addRow(n, +$('select', tr).value))
+    }
+    $('button', tr).onclick = () => { tr.remove(); rows.children.length || addRow() }
+    rows.append(tr)
+    return input
+  }
+  addRow()
+  $('#addRow', el).onclick = () => addRow().focus()
+
+  $('#add', el).onsubmit = e => {
+    e.preventDefault()
+    const seen = new Set(), list = []
+    for (const tr of rows.children) {
+      const name = $('input', tr).value.trim()
+      if (name && !seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); list.push({ section_id: cls.id, name, level: +$('select', tr).value }) }
+    }
+    if (!list.length) { $('input', rows).focus(); return say('Type at least one student name.', 'bad') }
+    run(supabase.from('students').insert(list), `Added ${list.length} student${list.length > 1 ? 's' : ''}.`)
+  }
+
   el.querySelectorAll('tr[data-stu]').forEach(tr => {
-    const id = tr.dataset.stu
-    $('[data-level]', tr).onchange = e => run(supabase.from('students').update({ level: +e.target.value }).eq('id', id))
-    $('[data-delstu]', tr).onclick = () => confirm('Remove this student?') && run(supabase.from('students').delete().eq('id', id))
+    $('[data-level]', tr).onchange = e => run(supabase.from('students').update({ level: +e.target.value }).eq('id', tr.dataset.stu))
   })
+
+  // select many → move / set level / remove
+  if (!students.length) return
+  const picks = [...el.querySelectorAll('[data-pick]')]
+  const chosen = () => picks.filter(p => p.checked).map(p => p.closest('tr').dataset.stu)
+  const sync = () => {
+    const n = chosen().length
+    $('#bulk', el).hidden = !n
+    $('#count', el).textContent = `${n} selected`
+    $('#all', el).checked = n === picks.length
+    $('#all', el).indeterminate = n > 0 && n < picks.length
+  }
+  picks.forEach(p => p.onchange = sync)
+  $('#all', el).onchange = e => { picks.forEach(p => p.checked = e.target.checked); sync() }
+  $('#moveTo', el)?.addEventListener('change', e => e.target.value &&
+    run(supabase.from('students').update({ section_id: e.target.value }).in('id', chosen()), 'Moved.'))
+  $('#setLevel', el).onchange = e => e.target.value &&
+    run(supabase.from('students').update({ level: +e.target.value }).in('id', chosen()), 'Level updated.')
+  $('#delSel', el).onclick = e => armed(e.currentTarget) &&
+    run(supabase.from('students').delete().in('id', chosen()), 'Removed.')
 }

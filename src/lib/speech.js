@@ -24,17 +24,19 @@ export function speak(text, lang) {
   return { fallback, ended: new Promise(r => { u.onend = u.onerror = r }) }
 }
 
-// Resolves with everything heard until stop (signal abort), silence end, or maxMs.
-export function listen(lang, maxMs = 30000, signal) {
+// Resolves with everything heard until stop (signal abort), silence end, maxMs,
+// or onText(textSoFar) returning true (e.g. the reader reached the last word).
+export function listen(lang, maxMs = 30000, signal, local = false, onText = () => false) {
   const R = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition
   if (!R) return Promise.reject(new Error('unsupported'))
   return new Promise((resolve, reject) => {
     const r = new R()
     r.lang = lang === 'ceb-PH' ? CEB_LISTEN_LANG : lang
+    if (local) r.processLocally = true
     r.continuous = true
-    r.interimResults = false
+    r.interimResults = true // live words for highlighting
     let text = '', failed = false
-    r.onresult = e => { text = [...e.results].map(x => x[0].transcript).join(' ') }
+    r.onresult = e => { text = [...e.results].map(x => x[0].transcript).join(' '); if (onText(text)) r.stop() }
     r.onerror = e => {
       failed = true
       reject(new Error(['not-allowed', 'service-not-allowed'].includes(e.error) ? 'denied' : e.error))
@@ -44,6 +46,73 @@ export function listen(lang, maxMs = 30000, signal) {
     signal?.addEventListener('abort', () => r.stop())
     r.start()
   })
+}
+
+// On-device recognition (newer Chrome): no Google servers needed, so it works where a network blocks them.
+// Downloads the language pack on first use. Resolves true when ready, false when this browser/language can't.
+export async function localSpeechReady(lang) {
+  const R = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition
+  const opts = { langs: [lang === 'ceb-PH' ? CEB_LISTEN_LANG : lang], processLocally: true }
+  if (!R?.available) return false
+  try {
+    const state = await R.available(opts)
+    if (state === 'available') return true
+    if (state === 'downloadable' || state === 'downloading') return await R.install(opts)
+  } catch {}
+  return false
+}
+
+// Last resort: record with the mic, then transcribe in the browser with Whisper (no speech servers at all).
+// First use downloads the model (~80 MB) from Hugging Face; the browser caches it after that.
+// ponytail: Whisper has no Bisaya, so Bisaya is transcribed as Tagalog; swap the model if accuracy matters there.
+let asrPipeline
+const WHISPER_LANG = { en: 'english', fil: 'tagalog', tl: 'tagalog', ceb: 'tagalog' }
+// While recording it re-transcribes the audio so far (~every 2 s) and calls onText for live highlighting;
+// onText returning true stops early. ponytail: re-transcribes from the start each pass, fine for
+// lesson-length reads (< ~1 min); switch to a sliding window if short stories feel slow.
+export async function recordAndTranscribe(lang, maxMs, signal, onStatus = () => {}, onText = () => false) {
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error('unsupported')
+  asrPipeline ??= import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3')
+    .then(({ pipeline }) => pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { dtype: 'q8' }))
+  const pipe = asrPipeline
+  pipe.catch(() => { asrPipeline = null }) // let a later try re-download after a failure
+
+  let stream
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) }
+  catch { throw new Error('denied') }
+  const rec = new MediaRecorder(stream), chunks = []
+  rec.ondataavailable = e => chunks.push(e.data)
+  const stopped = new Promise(r => { rec.onstop = r })
+  const stop = () => rec.state !== 'inactive' && rec.stop()
+  rec.start(1000) // a chunk every second so we can transcribe while recording
+  onStatus('Recording… read the words out loud.')
+  const timer = setTimeout(stop, maxMs)
+  signal?.addEventListener('abort', stop)
+
+  const opts = { language: WHISPER_LANG[base(lang)] ?? 'english', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 }
+  const transcribe = async () => {
+    const ctx = new AudioContext({ sampleRate: 16000 }) // Whisper expects 16 kHz mono
+    try {
+      const audio = (await ctx.decodeAudioData(await new Blob(chunks).arrayBuffer())).getChannelData(0)
+      return (await (await pipe)(audio, opts)).text.trim()
+    } finally { ctx.close() }
+  }
+
+  // live passes until recording ends (skipped while the model is still downloading)
+  let ready = false
+  pipe.then(() => { ready = true }, () => {})
+  let recording = true
+  stopped.then(() => { recording = false })
+  while (recording) {
+    await Promise.race([stopped, new Promise(r => setTimeout(r, 2000))])
+    if (!recording || !ready || !chunks.length) continue
+    try { if (onText(await transcribe())) stop() } catch {} // a partial chunk can fail to decode; next pass catches up
+  }
+  clearTimeout(timer); stream.getTracks().forEach(t => t.stop())
+
+  onStatus('Checking the reading… (first time downloads the speech model, about a minute)')
+  try { await pipe } catch { throw new Error('model') }
+  return transcribe()
 }
 
 let cebPipeline
