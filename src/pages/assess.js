@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase.js'
 import { listen, localSpeechReady, recordAndTranscribe, speak } from '../lib/speech.js'
 import { saveAttempt } from '../lib/offline.js'
 import { scoreReading } from '../lib/score.js'
-import { passScore, levelLabel } from '../lib/levels.js'
+import { passScore, levelLabel, MAX_LEVEL } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
 
 const ERRORS = {
@@ -95,5 +95,18 @@ export async function render(el, [studentId, lessonId]) {
       ? `<b class="ok">Pasado! ${esc(levelLabel(level))}</b>`
       : passed ? 'Passed.' : `<span>Keep practicing — ${Math.round(passScore(lesson.language) * 100)}% needed.</span> <button id="again">Try again</button>`)
     $('#again', el)?.addEventListener('click', () => render(el, [studentId, lessonId]))
+    if (passed) msg.insertAdjacentHTML('beforeend', ' ' + await nextStep(student, lesson, queued ? null : level))
   }
+}
+
+// After a pass: link to the next lesson for this student. Moved up → newest lesson at the new level;
+// same level → another lesson at that level. Offline (level unknown) assumes the usual one-level move-up.
+async function nextStep(student, lesson, level) {
+  const to = level ?? (lesson.level === student.level ? student.level + 1 : student.level)
+  if (to >= MAX_LEVEL) return '<b class="ok">All levels finished!</b>'
+  const { data: lessons } = await supabase.from('lessons').select('id, level').order('created_at', { ascending: false })
+  const next = (lessons ?? []).find(l => l.level === to && l.id !== lesson.id)
+  const label = to > student.level ? `Next level: ${levelLabel(to)} →` : 'Next lesson →'
+  return next ? `<a href="#/assess/${student.id}/${next.id}"><button class="primary">${esc(label)}</button></a>`
+    : `<span class="muted">No lesson for ${esc(levelLabel(to))} yet.</span>`
 }

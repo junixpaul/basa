@@ -106,6 +106,9 @@
   @media (prefers-reduced-motion: reduce) { .splash, .splash img { animation:none } .spinner { animation-duration:2s } }
   #list:not(.picking) .pick { display:none } /* tick boxes only while moving students */
   td { vertical-align:middle } .nowrap { white-space:nowrap }
+  /* lesson words use the reading font everywhere: typing them, picture labels, missed words, what was heard */
+  textarea[name=items], input[aria-label="Picture label"], .chip, .bad-words, td details { font-family:Andika, Nunito, sans-serif }
+  textarea[name=items], input[aria-label="Picture label"] { font-weight:400 } textarea[name=items] { font-size:20px; line-height:1.6 } td details summary { font-family:Nunito, sans-serif }
   .row.head { margin:0 0 8px } .row.head h1 { margin:0 }
   @media (max-width:640px) { /* phones: compact header that scrolls away instead of covering a quarter of the screen */
     header { position:static; gap:8px } header nav { width:100%; gap:4px; margin:0 }
