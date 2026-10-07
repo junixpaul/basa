@@ -1,4 +1,5 @@
 import { supabase } from './lib/supabase.js'
+import { startOffline, flush, pending } from './lib/offline.js'
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 export const $ = (sel, el = document) => el.querySelector(sel)
@@ -133,9 +134,13 @@ async function login(el) {
 let seq = 0
 async function route() {
   const el = $('#app'), hash = location.hash || '#/', mine = ++seq
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data } = await supabase.auth.getSession()
   if (mine !== seq) return
+  // offline, an expired token can't refresh, so getSession returns none; the saved login still counts
+  const session = data.session || (!navigator.onLine && hasSavedLogin())
   $('#out').hidden = !session
+  // just signed in: swap the login card for the splash until the first page is ready
+  if (session && document.body.classList.contains('signed-out')) el.replaceChildren($('#splash').content.cloneNode(true))
   document.body.classList.toggle('signed-out', !session)
   if (!session) return login(el)
   // highlight the menu item for this page; reading pages belong to their section
@@ -147,13 +152,42 @@ async function route() {
     if (!m) continue
     // render off-screen, then swap in only if the user hasn't moved on; a slow page can't overwrite a newer one
     const box = document.createElement('div')
-    await (await load()).render(box, m.slice(1))
+    try { await (await load()).render(box, m.slice(1)) }
+    catch (err) {
+      if (navigator.onLine) throw err
+      // offline and this page's data was never saved on the device
+      box.innerHTML = `<h1>Not saved for offline yet</h1><p class="muted">Connect to the internet once, then tap
+        <b>Get ready for offline</b> on the Dashboard.</p><div class="row"><a href="#/dashboard"><button class="primary">Dashboard</button></a></div>`
+    }
     if (mine === seq) el.replaceChildren(box)
     return
   }
   el.innerHTML = '<h1>Page not found</h1><div class="row"><a href="#/"><button class="primary">Go to classes</button></a></div>'
 }
 
-$('#out').onclick = e => armed(e.currentTarget) && supabase.auth.signOut()
-supabase.auth.onAuthStateChange(() => setTimeout(route)) // setTimeout: awaiting supabase inside this callback can deadlock
+function hasSavedLogin() {
+  try { return Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')) } catch { return false }
+}
+
+// Sign out: upload saved readings first (they belong to this teacher), then wipe this teacher's offline data.
+$('#out').onclick = async () => {
+  const dlg = $('#outDlg'), warn = $('#outWarn'), ok = $('#outOk')
+  await flush()
+  const n = pending()
+  warn.hidden = !n
+  warn.textContent = n === 1
+    ? "1 reading saved on this device hasn't uploaded yet. Connect to the internet first so it isn't lost."
+    : `${n} readings saved on this device haven't uploaded yet. Connect to the internet first so they aren't lost.`
+  ok.disabled = n > 0 // readings belong to this teacher; signing out would strand them
+  dlg.returnValue = ''
+  dlg.showModal()
+}
+$('#outDlg').onclose = async () => {
+  if ($('#outDlg').returnValue !== 'ok') return
+  await caches?.delete('basa-data').catch(() => {})
+  supabase.auth.signOut()
+}
+$('#outDlg').onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close('cancel') } // tap the dim backdrop to cancel
+startOffline()
+supabase.auth.onAuthStateChange(() => setTimeout(() => { route(); flush() })) // setTimeout: awaiting supabase inside this callback can deadlock; flush: upload saved readings after sign-in
 addEventListener('hashchange', route)
