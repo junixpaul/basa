@@ -70,12 +70,19 @@ const WHISPER_LANG = { en: 'english', fil: 'tagalog', tl: 'tagalog', ceb: 'tagal
 // While recording it re-transcribes the audio so far (~every 2 s) and calls onText for live highlighting;
 // onText returning true stops early. ponytail: re-transcribes from the start each pass, fine for
 // lesson-length reads (< ~1 min); switch to a sliding window if short stories feel slow.
+// Loads (first time: downloads) the Whisper model. Also used by "Get ready for offline".
+export function warmWhisper() {
+  if (!asrPipeline) {
+    asrPipeline = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3')
+      .then(({ pipeline }) => pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { dtype: 'q8' }))
+    asrPipeline.catch(() => { asrPipeline = null }) // let a later try re-download after a failure
+  }
+  return asrPipeline
+}
+
 export async function recordAndTranscribe(lang, maxMs, signal, onStatus = () => {}, onText = () => false) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('unsupported')
-  asrPipeline ??= import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3')
-    .then(({ pipeline }) => pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { dtype: 'q8' }))
-  const pipe = asrPipeline
-  pipe.catch(() => { asrPipeline = null }) // let a later try re-download after a failure
+  const pipe = warmWhisper()
 
   let stream
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) }

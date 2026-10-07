@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
-import { listen, localSpeechReady, recordAndTranscribe } from '../lib/speech.js'
+import { listen, localSpeechReady, recordAndTranscribe, speak } from '../lib/speech.js'
+import { saveAttempt } from '../lib/offline.js'
 import { scoreReading } from '../lib/score.js'
 import { passScore, levelLabel } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
@@ -23,8 +24,20 @@ export async function render(el, [studentId, lessonId]) {
   el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/"><button>← Back to classes</button></a></div>
     <p class="muted">${esc(student.name)} · ${esc(levelLabel(student.level))}</p><h1>${esc(lesson.title)}</h1>
     <p class="big" id="text">${esc(target)}</p>
-    <div class="row"><button class="primary" id="go">🎤 Start reading</button><button id="stop" hidden>■ Stop</button><span id="msg" role="status"></span></div>`
-  const go = $('#go', el), stop = $('#stop', el), msg = $('#msg', el)
+    <div class="row"><button class="primary" id="go">🎤 Start reading</button><button id="hear">🔊 Read the words</button><button id="stop" hidden>■ Stop</button><span id="msg" role="status"></span></div>`
+  const go = $('#go', el), stop = $('#stop', el), msg = $('#msg', el), hear = $('#hear', el)
+
+  // Text-to-speech model reading; tap again to stop. Never runs while the mic listens.
+  let speaking = false
+  const hush = () => { speechSynthesis.cancel(); speaking = false; hear.textContent = '🔊 Read the words' }
+  hear.onclick = () => {
+    if (speaking) return hush()
+    speaking = true; hear.textContent = '■ Stop voice'
+    const { fallback, ended } = speak(target, lesson.language)
+    if (fallback) msg.textContent = `No ${lesson.language} voice on this device; using the closest one.`
+    ended.then(() => { if (speaking) hush() })
+  }
+  addEventListener('hashchange', () => speaking && hush(), { once: true }) // leaving the page stops the voice
   const mark = w => `<span class="w ${w.cls}">${esc(w.text)}${w.cls ? `<sup aria-label="${w.cls === 'ok' ? 'correct' : 'missed'}">${w.cls === 'ok' ? '✓' : '✗'}</sup>` : ''}</span>`
 
   // Live: heard words turn ✓; words the reader already passed without a match turn ✗; the rest wait.
@@ -39,16 +52,18 @@ export async function render(el, [studentId, lessonId]) {
   go.onclick = async () => {
     const ctl = new AbortController()
     stop.onclick = () => ctl.abort()
+    hush(); hear.disabled = true // the computer's voice must not be scored as the child's reading
     go.hidden = true; stop.hidden = false; msg.textContent = 'Listening… read the words out loud.'
     let heard
     const maxMs = lesson.level === 4 ? 180000 : 60000
     try {
       try {
+        if (!navigator.onLine) throw new Error('network') // no signal: go straight to on-device listening
         heard = await listen(lesson.language, maxMs, ctl.signal, false, live)
       } catch (e) {
-        // Google's speech service blocked (work network, VPN, firewall) → try Chrome's on-device recognition
+        // Google's speech service unreachable (no signal, VPN, firewall) → try Chrome's on-device recognition
         if (e.message !== 'network') throw e
-        msg.textContent = 'Speech service blocked — switching to offline listening…'
+        msg.textContent = 'Switching to offline listening…'
         if (await localSpeechReady(lesson.language)) {
           msg.textContent = 'Listening (offline)… read the words out loud.'
           heard = await listen(lesson.language, maxMs, ctl.signal, true, live)
@@ -61,17 +76,22 @@ export async function render(el, [studentId, lessonId]) {
     } catch (e) {
       msg.textContent = ERRORS[e.message] ?? `Microphone problem: ${e.message}`
       go.hidden = false; stop.hidden = true; return
-    } finally { stop.hidden = true }
+    } finally { stop.hidden = true; hear.disabled = false }
     if (!heard) { msg.textContent = ERRORS['no-speech']; go.hidden = false; return }
 
     const r = scoreReading(target, heard)
     const passed = r.score >= passScore(lesson.language)
     $('#text', el).innerHTML = r.words.map(w => mark({ text: w.text, cls: w.ok ? 'ok' : 'bad' })).join('')
     msg.textContent = `Score ${Math.round(r.score * 100)}% — saving…`
-    const { data: level, error } = await supabase.rpc('record_attempt',
-      { p_student: studentId, p_lesson: lessonId, p_score: r.score, p_passed: passed, p_result: { heard, words: r.words } })
-    if (error) { msg.textContent = `Could not save: ${error.message}`; return }
-    msg.innerHTML = `Score ${Math.round(r.score * 100)}%. ` + (level > student.level
+    let saved
+    try {
+      saved = await saveAttempt({ p_student: studentId, p_lesson: lessonId, p_score: r.score, p_passed: passed, p_result: { heard, words: r.words } })
+    } catch (error) { msg.textContent = `Could not save: ${error.message}`; return }
+    const { level, queued } = saved
+    msg.innerHTML = `Score ${Math.round(r.score * 100)}%. ` + (queued
+      ? `${passed ? '<b class="ok">Passed!</b> ' : ''}Saved on this device — it uploads when there's signal.`
+        + (passed ? '' : ` <button id="again">Try again</button>`)
+      : level > student.level
       ? `<b class="ok">Pasado! ${esc(levelLabel(level))}</b>`
       : passed ? 'Passed.' : `<span>Keep practicing — ${Math.round(passScore(lesson.language) * 100)}% needed.</span> <button id="again">Try again</button>`)
     $('#again', el)?.addEventListener('click', () => render(el, [studentId, lessonId]))

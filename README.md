@@ -6,13 +6,23 @@ Free stack, no build step: static HTML and ES modules, Supabase Free, and librar
 
 ## Setup
 
-1. Create a free project at supabase.com. In the SQL editor, run `supabase/migrations/0001_init.sql`.
+1. Create a free project at supabase.com. In the SQL editor, run every file in `supabase/migrations/` in order (`0001` to `0004`).
 2. Under Authentication → URL Configuration, add your site URL (and `http://localhost:5173` for local work).
 3. Under Authentication → Sign In / Providers, turn on **Google** and **Facebook** and paste each app's client ID and secret. In the Google Cloud console and the Meta developer app, set the redirect URI to `https://YOUR-PROJECT.supabase.co/auth/v1/callback`. Email sign-in links work without this step.
 4. Create the administrator: Authentication → Users → **Add user** → **Create new user**. Enter the admin email and a strong password, and tick **Auto Confirm User**. The admin then logs in with email + password, and stays signed in on that device until they sign out. Teachers can set a password the same way, or keep using Google, Facebook or the email link.
 5. Put the project URL and anon key in `config.js`.
 6. Run locally with `npm run dev` (Python static server), then open http://localhost:5173 in **Chrome or Edge**.
 7. Deploy by importing the repo into Vercel (Hobby). No build command; the output directory is `.`
+
+## Offline use (rural schools)
+
+Basa installs as an app (Chrome menu → **Install Basa** / **Add to Home screen**) and keeps working without signal:
+
+1. While online, sign in and tap **Get ready for offline** on the Dashboard. It saves every class, student and lesson on the device and downloads the speech checker (~80 MB, once).
+2. Offline, teachers can open those pages and run readings. Scores are saved on the device; the header shows how many are waiting.
+3. When there is signal again, saved readings upload by themselves with their real date. Sign-out waits until they have uploaded.
+
+Adding or editing classes, students and lessons still needs a connection.
 
 ## Bisaya voice (optional)
 

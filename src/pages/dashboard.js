@@ -1,20 +1,23 @@
 import { supabase } from '../lib/supabase.js'
 import { LEVELS, MAX_LEVEL, PASS_SCORE } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
+import { prepareOffline } from '../lib/offline.js'
 
 const DAY = 864e5
 const pct = x => `${Math.round(x * 100)}%`
 const avg = xs => xs.reduce((a, b) => a + b, 0) / xs.length
 const remembered = () => { try { return localStorage.getItem('dashClass') || '' } catch { return '' } }
 
-// ponytail: loads all attempts from the last 30 days in one query; add a date-bucketed view when a teacher has many thousands.
+// ponytail: loads every attempt and filters to 30 days here, so the query URL never changes and the
+// offline copy always matches; add a server-side date view when a teacher has many thousands.
 export async function render(el) {
-  const since = new Date(Date.now() - 30 * DAY).toISOString()
-  const [{ data: sections }, { data: allStudents }, { data: allAttempts }] = await Promise.all([
+  const since = Date.now() - 30 * DAY
+  const [{ data: sections }, { data: allStudents }, { data: everyAttempt }] = await Promise.all([
     supabase.from('sections').select('id, name').order('name'),
     supabase.from('students').select('id, name, level, section_id').order('name'),
-    supabase.from('attempts').select('student_id, score, passed, created_at').gte('created_at', since),
+    supabase.from('attempts').select('student_id, score, passed, created_at'),
   ])
+  const allAttempts = everyAttempt.filter(a => Date.parse(a.created_at) > since)
   const cls = sections.some(s => s.id === remembered()) ? remembered() : ''
   const students = allStudents.filter(s => !cls || s.section_id === cls)
   const ids = new Set(students.map(s => s.id))
@@ -37,10 +40,14 @@ export async function render(el) {
   const tile = (label, value, note = '') => `<div class="tile"><span class="muted">${label}</span><b>${value}</b>${note ? `<span class="muted small">${note}</span>` : ''}</div>`
   const who = s => `<a href="#/students/${s.id}">${esc(s.name)}</a><span class="muted small"> · ${esc(className[s.section_id] ?? '')}</span>`
 
+  let ready = 0
+  try { ready = +localStorage.getItem('offlineReady') || 0 } catch {}
   el.innerHTML = `<h1>Dashboard</h1>
     <div class="row">
       <label for="dc">Class</label>
       <select id="dc"><option value="">All classes</option>${sections.map(s => `<option value="${s.id}" ${s.id === cls ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+      <span style="margin-left:auto" class="row"><span id="prepMsg" class="muted small" role="status">${ready ? `✓ Ready for offline · ${new Date(ready).toLocaleDateString()}` : ''}</span>
+        <button id="prep">${ready ? 'Update offline copy' : 'Get ready for offline'}</button></span>
     </div>
 
     <div class="tiles">
@@ -70,4 +77,12 @@ export async function render(el) {
     </div>`
 
   $('#dc', el).onchange = e => { try { localStorage.setItem('dashClass', e.target.value) } catch {} render(el) }
+  $('#prep', el).onclick = async e => {
+    const btn = e.currentTarget, msg = $('#prepMsg', el), say = t => { msg.textContent = t }
+    if (!navigator.onLine) return say('Connect to the internet first.')
+    btn.disabled = true
+    try { await prepareOffline(say); say(`✓ Ready for offline · ${new Date().toLocaleDateString()}`); btn.textContent = 'Update offline copy' }
+    catch (err) { say(`Stopped: ${err.message}. Try again with a stronger signal.`) }
+    btn.disabled = false
+  }
 }

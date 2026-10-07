@@ -11,14 +11,22 @@ export function render(el, [id]) { return id ? editor(el, id) : list(el) }
 
 async function list(el) {
   const { data } = await supabase.from('lessons').select('*').order('level').order('created_at')
-  el.innerHTML = `<h1>Lessons</h1>
-    <div class="row"><a href="#/lessons/new"><button class="primary">New lesson</button></a></div>
-    <div id="drop"></div>
+  el.innerHTML = `<div class="row head"><h1>Lessons</h1>
+      <button id="newBtn" class="primary" aria-expanded="false" aria-controls="newPanel" style="margin-left:auto">+ New lesson</button></div>
+    <div id="newPanel" class="addbox" hidden>
+      <b>Make a new lesson</b>
+      <div class="row" style="margin:0"><a href="#/lessons/new"><button>Type the words myself</button></a><span class="muted">or make it from a file:</span></div>
+      <div id="drop"></div>
+    </div>
     <table><thead><tr><th>Level</th><th>Title</th><th>Language</th><th></th></tr></thead><tbody>
     ${data.map(l => `<tr><td>${l.level} · ${LEVELS[l.level]}</td><td>${esc(l.title)}</td><td>${esc(LANGS[l.language] ?? l.language)}</td>
       <td><a href="#/play/${l.id}">Open</a> · <a href="#/lessons/${l.id}">Edit</a></td></tr>`).join('')}
     </tbody></table>${data.length ? '' : '<p class="muted">No lessons yet.</p>'}`
   ;(await import('./drop.js')).mountDrop($('#drop', el), openDraft)
+  const panel = $('#newPanel', el), btn = $('#newBtn', el)
+  const open = on => { panel.hidden = !on; btn.textContent = on ? '✕ Close' : '+ New lesson'; btn.setAttribute('aria-expanded', on) }
+  btn.onclick = () => open(panel.hidden)
+  if (!data.length) open(true) // no lessons yet: show how to make one
 }
 
 async function editor(el, id) {
@@ -35,7 +43,8 @@ async function editor(el, id) {
   const pics = items.filter(i => i.image_path || i.image)
   const other = !(lesson.language in LANGS)
 
-  el.innerHTML = `<h1>${id === 'new' ? 'New lesson' : 'Edit lesson'}</h1>
+  el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/lessons"><button>← All lessons</button></a></div>
+    <h1>${id === 'new' ? 'New lesson' : 'Edit lesson'}</h1>
     <form id="f">
       <div class="row"><label>Title <input name="title" required value="${esc(lesson.title)}"></label></div>
       <div class="row"><label>Level <select name="level">${Object.entries(LEVELS).map(([n, t]) =>
