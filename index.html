@@ -105,7 +105,13 @@
   @keyframes pop { from { transform:scale(.6); opacity:0 } 70% { transform:scale(1.08) } }
   @media (prefers-reduced-motion: reduce) { .splash, .splash img { animation:none } .spinner { animation-duration:2s } }
   #list:not(.picking) .pick { display:none } /* tick boxes only while moving students */
-  td { vertical-align:middle } .nowrap { white-space:nowrap }
+  .lvl { margin-top:20px } .lvl h2 { margin:0 0 4px; font-size:22px }
+  @media (max-width:640px) { .stepper { flex-wrap:nowrap; gap:2px } .stepper li { min-width:0; font-size:12px } .stepper .dot { width:30px; height:30px } }
+  .now-on { padding:12px 16px; background:var(--hover); border:2px solid var(--primary); border-radius:var(--radius) } .now-on b { font-size:20px }
+  td { vertical-align:middle } .nowrap { white-space:nowrap } tr[data-href] { cursor:pointer }
+  /* lesson words use the reading font everywhere: typing them, picture labels, missed words, what was heard */
+  textarea[name=items], input[aria-label="Picture label"], .chip, .bad-words, td details { font-family:Andika, Nunito, sans-serif }
+  textarea[name=items], input[aria-label="Picture label"] { font-weight:400 } textarea[name=items] { font-size:20px; line-height:1.6 } td details summary { font-family:Nunito, sans-serif }
   .row.head { margin:0 0 8px } .row.head h1 { margin:0 }
   @media (max-width:640px) { /* phones: compact header that scrolls away instead of covering a quarter of the screen */
     header { position:static; gap:8px } header nav { width:100%; gap:4px; margin:0 }
@@ -145,9 +151,6 @@
   .auth-logo { width:64px; height:64px; margin:0 auto }
   .auth form { display:grid; gap:8px; text-align:left } .auth form label:not(:first-child) { margin-top:8px }
   .auth button { width:100% } .auth #msg { margin:0; font-weight:700; font-size:15px } .auth #msg:empty { display:none } .auth #msg.ok { color:var(--ok) } .auth #msg.bad { color:var(--bad); text-decoration:none }
-  .social { display:flex; align-items:center; justify-content:center; gap:10px } .social svg { width:22px; height:22px; flex:none }
-  .or { display:flex; align-items:center; gap:12px; margin:4px 0; color:var(--muted); font-size:14px; font-weight:700 }
-  .or::before, .or::after { content:""; flex:1; border-top:2px solid var(--line) }
   [aria-invalid="true"] { border-color:var(--bad) }
   .small { font-size:14px; margin:4px 0 0 }
   .switch { margin:4px 0 0; font-size:15px }
@@ -168,6 +171,16 @@
     <div class="row" style="justify-content:flex-end;margin-bottom:0">
       <button value="cancel" autofocus>Stay signed in</button>
       <button value="ok" id="outOk" class="danger">Sign out</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="askDlg" aria-labelledby="askTitle" aria-describedby="askBody">
+  <form method="dialog">
+    <h2 id="askTitle"></h2>
+    <p id="askBody" class="muted"></p>
+    <div class="row" style="justify-content:flex-end;margin-bottom:0">
+      <button value="cancel" autofocus>Cancel</button>
+      <button value="ok" id="askOk" class="danger"></button>
     </div>
   </form>
 </dialog>

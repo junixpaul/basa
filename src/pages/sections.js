@@ -1,17 +1,18 @@
 import { supabase } from '../lib/supabase.js'
-import { LEVELS, MAX_LEVEL, levelLabel } from '../lib/levels.js'
-import { esc, $, armed } from '../app.js'
+import { LEVELS, MAX_LEVEL, familyNames, familyLabel, stageLabel, lessonFor } from '../lib/levels.js'
+import { esc, $, ask } from '../app.js'
 
-const levelOpts = (cur = 1) => Array.from({ length: MAX_LEVEL }, (_, i) => i + 1)
-  .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n < MAX_LEVEL ? `Level ${n} · ${LEVELS[n]}` : 'Finished'}</option>`).join('')
+// a student's level = CVC family; step inside it = Words → Phrases → Sentences → Short Story (5 = all done)
+const famOpts = (fams, cur) => Object.keys(fams).map(Number).sort((a, b) => a - b)
+  .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>${familyLabel(n, fams)}</option>`).join('')
 const remembered = () => { try { return localStorage.getItem('class') } catch { return null } }
 const remember = id => { try { localStorage.setItem('class', id) } catch {} }
 
 // One class at a time (picked from a dropdown), so teachers never mix up sections.
 export async function render(el) {
   const [{ data: sections }, { data: lessons }] = await Promise.all([
-    supabase.from('sections').select('id, name').order('name'),
-    supabase.from('lessons').select('id, level').order('created_at', { ascending: false }),
+    supabase.from('sections').select('id, name').is('archived_at', null).order('name'),
+    supabase.from('lessons').select('id, level, family, family_no').is('archived_at', null).order('created_at', { ascending: false }),
   ])
   const setupBtn = label => `<a href="#/setup"><button>${label}</button></a>`
   if (!sections.length) {
@@ -19,17 +20,18 @@ export async function render(el) {
     return
   }
   const cls = sections.find(s => s.id === remembered()) || sections[0]
-  const { data: students } = await supabase.from('students').select('id, name, level, prev_level').eq('section_id', cls.id).order('name')
+  const { data: students } = await supabase.from('students').select('id, name, level, family_no, prev_level, prev_family_no').is('archived_at', null).eq('section_id', cls.id).order('name')
   // latest reading score per student per level (attempts come newest first, so the first one seen wins)
   const { data: attempts } = students.length
-    ? await supabase.from('attempts').select('student_id, score, passed, lessons(level)').in('student_id', students.map(s => s.id)).order('created_at', { ascending: false })
+    ? await supabase.from('attempts').select('student_id, score, passed, lessons(level, family_no)').in('student_id', students.map(s => s.id)).order('created_at', { ascending: false })
     : { data: [] }
   const latest = {}
-  for (const a of attempts ?? []) latest[`${a.student_id}:${a.lessons?.level}`] ??= a
-  const scoreAt = (st, lv) => latest[`${st.id}:${lv}`]
+  for (const a of attempts ?? []) latest[`${a.student_id}:${a.lessons?.family_no ?? ''}:${a.lessons?.level}`] ??= a
+  // a teacher's own lessons have no family, so they count for whichever family the student is in
+  const scoreAt = (st, fam, lv) => latest[`${st.id}:${fam}:${lv}`] ?? latest[`${st.id}::${lv}`]
+  const fams = familyNames(lessons)
   const scoreTag = a => a ? `<span class="nowrap"><b class="${a.passed ? 'ok' : ''}">${Math.round(a.score * 100)}%</b> <span class="muted small">${a.passed ? '✓' : '✗'}</span></span>` : ''
-  const short = n => (n >= MAX_LEVEL ? 'Finished' : `L${n} · ${LEVELS[n]}`)
-  const newest = lv => lessons.find(l => l.level === lv)
+  const short = (fam, n) => n >= MAX_LEVEL ? 'All done' : `L${fam}${fams[fam] ? ` ${fams[fam]}` : ''} · S${n} ${LEVELS[n]}`
   const others = sections.filter(s => s.id !== cls.id)
 
   el.innerHTML = `<h1>Classes</h1>
@@ -55,18 +57,18 @@ export async function render(el) {
     <div class="row bulk" id="bulk" hidden>
       <b id="count">Tick the students to move</b>
       ${others.length ? `<select id="moveTo" aria-label="Move to class" disabled><option value="">Move to…</option>${others.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>` : ''}
-      <select id="setLevel" aria-label="Set level" disabled><option value="">Set level…</option>${levelOpts(0)}</select>
+      <select id="setLevel" aria-label="Set level" disabled><option value="">Set level…</option>${famOpts(fams, 0)}</select>
       <button id="delSel" disabled>Remove</button>    </div>
     <table id="list"><thead><tr>
       <th class="pick" style="width:40px"><input type="checkbox" id="all" aria-label="Select all students"></th>
       <th>Student</th><th>Prev level</th><th>Level</th><th>Score</th><th></th></tr></thead><tbody>
     ${students.map(st => {
-      const l = st.level < MAX_LEVEL && newest(st.level), a = scoreAt(st, st.level)
-      return `<tr data-stu="${st.id}">
+      const l = lessonFor(lessons, st), a = scoreAt(st, st.family_no, st.level)
+      return `<tr data-stu="${st.id}" data-href="#/students/${st.id}">
         <td class="pick"><input type="checkbox" data-pick aria-label="Select ${esc(st.name)}"></td>
         <td class="name"><a href="#/students/${st.id}">${esc(st.name)}</a></td>
-        <td data-label="Prev level"><span class="nowrap"><span class="muted">${st.prev_level ? short(st.prev_level) : '—'}</span> ${st.prev_level ? scoreTag(scoreAt(st, st.prev_level)) : ''}</span></td>
-        <td data-label="Level"><select data-level aria-label="Level of ${esc(st.name)}">${levelOpts(st.level)}</select></td>
+        <td data-label="Prev level"><span class="muted">${st.prev_level ? short(st.prev_family_no ?? st.family_no, st.prev_level) : '—'}</span> ${st.prev_level ? scoreTag(scoreAt(st, st.prev_family_no ?? st.family_no, st.prev_level)) : ''}</td>
+        <td data-label="Level">${st.level >= MAX_LEVEL ? '<b>All levels done</b>' : `<b class="nowrap">${esc(familyLabel(st.family_no, fams))}</b><br><span class="muted nowrap">${stageLabel(st.level)}</span>`}</td>
         <td data-label="Score">${scoreTag(a) || '<span class="muted">—</span>'}</td>
         <td class="act">${l ? `<a href="#/assess/${st.id}/${l.id}"><button class="primary">Read</button></a>`
           : `<span class="muted small nowrap">${st.level < MAX_LEVEL ? 'No lesson yet' : 'Finished'}</span>`}</td></tr>`
@@ -89,7 +91,7 @@ export async function render(el) {
   const addRow = (name = '', level = +(rows.lastElementChild?.querySelector('select').value || 1)) => {
     const tr = document.createElement('tr')
     tr.innerHTML = `<td><input aria-label="Student name" placeholder="Juan Dela Cruz" autocomplete="off"></td>
-      <td><select aria-label="Starting level">${levelOpts(level)}</select></td>
+      <td><select aria-label="Starting level (word family)">${famOpts(fams, level)}</select></td>
       <td><button type="button" aria-label="Remove row">✕</button></td>`
     const input = $('input', tr)
     input.value = name
@@ -124,15 +126,12 @@ export async function render(el) {
     const seen = new Set(), list = []
     for (const tr of rows.children) {
       const name = $('input', tr).value.trim()
-      if (name && !seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); list.push({ section_id: cls.id, name, level: +$('select', tr).value }) }
+      if (name && !seen.has(name.toLowerCase())) { seen.add(name.toLowerCase()); list.push({ section_id: cls.id, name, family_no: +$('select', tr).value, level: 1 }) }
     }
     if (!list.length) { $('input', rows).focus(); return say('Type at least one student name.', 'bad') }
     run(supabase.from('students').insert(list), `Added ${list.length} student${list.length > 1 ? 's' : ''}.`)
   }
 
-  el.querySelectorAll('tr[data-stu]').forEach(tr => {
-    $('[data-level]', tr).onchange = e => run(supabase.from('students').update({ level: +e.target.value }).eq('id', tr.dataset.stu))
-  })
 
   // "Move students" mode: tick boxes + action bar appear only while moving, so they don't take space otherwise
   if (!students.length) return
@@ -158,11 +157,21 @@ export async function render(el) {
     $('#all', el).indeterminate = n > 0 && n < picks.length
   }
   picks.forEach(p => p.onchange = sync)
+  // while moving students, a row click ticks the student instead of opening their page
+  $('#list', el).addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-stu]')
+    if (!picking || !tr || e.target.closest('a, button, select, input, label')) return
+    e.stopPropagation()
+    const box = $('[data-pick]', tr); box.checked = !box.checked; sync()
+  })
   $('#all', el).onchange = e => { picks.forEach(p => p.checked = e.target.checked); sync() }
   $('#moveTo', el)?.addEventListener('change', e => e.target.value &&
     run(supabase.from('students').update({ section_id: e.target.value }).in('id', chosen()), 'Moved.'))
   $('#setLevel', el).onchange = e => e.target.value &&
-    run(supabase.from('students').update({ level: +e.target.value }).in('id', chosen()), 'Level updated.')
-  $('#delSel', el).onclick = e => armed(e.currentTarget) &&
-    run(supabase.from('students').delete().in('id', chosen()), 'Removed.')
+    run(supabase.from('students').update({ family_no: +e.target.value, level: 1 }).in('id', chosen()), 'Level updated.')
+  $('#delSel', el).onclick = async () => {
+    const n = chosen().length
+    if (!await ask(`Remove ${n} student${n === 1 ? '' : 's'}?`, 'Are you sure? They move to the Archive, where you can restore them with all their readings.', 'Remove')) return
+    run(supabase.from('students').update({ archived_at: new Date().toISOString() }).in('id', chosen()), 'Moved to the Archive.')
+  }
 }

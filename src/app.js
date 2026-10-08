@@ -4,19 +4,20 @@ import { startOffline, flush, pending } from './lib/offline.js'
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 export const $ = (sel, el = document) => el.querySelector(sel)
 
-// Two-tap confirm for destructive buttons. Native confirm()/prompt() are blocked in some
-// embedded browsers, so never use them. Returns true on the second tap within 3 s.
-export function armed(btn) {
-  if (btn.dataset.armed) return true
-  const label = btn.textContent
-  btn.dataset.armed = 1; btn.textContent = 'Tap again to confirm'; btn.classList.add('danger')
-  setTimeout(() => { delete btn.dataset.armed; btn.textContent = label; btn.classList.remove('danger') }, 3000)
-  return false
+// Confirmation box (native <dialog>: backdrop, Esc and focus handling built in). Resolves true on OK.
+export function ask(title, body, okLabel) {
+  const dlg = $('#askDlg')
+  $('#askTitle').textContent = title; $('#askBody').textContent = body; $('#askOk').textContent = okLabel
+  dlg.returnValue = ''
+  dlg.showModal()
+  return new Promise(done => dlg.addEventListener('close', () => done(dlg.returnValue === 'ok'), { once: true }))
 }
+
 
 const routes = [
   [/^#\/$/, () => import('./pages/sections.js')],
   [/^#\/setup$/, () => import('./pages/setup.js')],
+  [/^#\/archive$/, () => import('./pages/archive.js')],
   [/^#\/students$/, () => import('./pages/students.js')],
   [/^#\/students\/([\w-]+)$/, () => import('./pages/progress.js')],
   [/^#\/dashboard$/, () => import('./pages/dashboard.js')],
@@ -26,17 +27,12 @@ const routes = [
   [/^#\/assess\/([\w-]+)\/([\w-]+)$/, () => import('./pages/assess.js')],
 ]
 
-const GOOGLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5a5.5 5.5 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.7z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>`
-const FACEBOOK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M15.1 15.5l.5-3.5h-3.3V9.8c0-1 .5-1.9 2-1.9h1.5v-3s-1.4-.2-2.7-.2c-2.8 0-4.6 1.7-4.6 4.7V12H5.4v3.5h3.1V24a12 12 0 0 0 3.8 0v-8.5h2.8z"/></svg>`
 
 async function login(el) {
   el.innerHTML = `<section class="auth">
       <svg class="auth-logo" viewBox="0 0 32 32" aria-hidden="true">${$('.brand svg').innerHTML}</svg>
       <h1>Welcome, teacher</h1>
       <p class="muted" id="sub">Sign in to manage your classes and lessons.</p>
-      <button class="social" data-p="google">${GOOGLE}Continue with Google</button>
-      <button class="social" data-p="facebook">${FACEBOOK}Continue with Facebook</button>
-      <p class="or"><span>or use email</span></p>
       <form novalidate>
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu.ph" aria-describedby="msg">
@@ -53,11 +49,6 @@ async function login(el) {
   const msg = $('#msg', el)
   // msg moves next to whatever it is about, so errors sit under their field
   const say = (text, kind = '', near = $('#link', el)) => { (near.closest('.pw') || near).after(msg); msg.textContent = text; msg.className = kind }
-  el.querySelectorAll('[data-p]').forEach(b => b.onclick = async () => {
-    b.disabled = true; say('Opening ' + b.textContent.replace('Continue with ', '') + '…', '', b)
-    const { error } = await supabase.auth.signInWithOAuth({ provider: b.dataset.p, options: { redirectTo: location.origin + location.pathname } })
-    if (error) { b.disabled = false; say(error.message, 'bad', b) }
-  })
   const email = $('#email', el), pw = $('#pw', el)
   $('#eye', el).onclick = e => {
     const show = pw.type === 'password'
@@ -144,7 +135,7 @@ async function route() {
   document.body.classList.toggle('signed-out', !session)
   if (!session) return login(el)
   // highlight the menu item for this page; reading pages belong to their section
-  const page = { assess: '#/', play: '#/lessons', students: '#/students' }[hash.split('/')[1]] || hash.match(/^#\/\w*/)[0]
+  const page = { assess: '#/', play: '#/lessons', students: '#/students', archive: '#/setup' }[hash.split('/')[1]] || hash.match(/^#\/\w*/)[0]
   document.querySelectorAll('header nav a').forEach(a =>
     a.getAttribute('href') === page ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'))
   for (const [re, load] of routes) {
@@ -187,7 +178,17 @@ $('#outDlg').onclose = async () => {
   await caches?.delete('basa-data').catch(() => {})
   supabase.auth.signOut()
 }
-$('#outDlg').onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close('cancel') } // tap the dim backdrop to cancel
+for (const d of ['#outDlg', '#askDlg']) // tap the dim backdrop to cancel
+  $(d).onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close('cancel') }
 startOffline()
+
+// Clickable list rows: <tr data-href="#/..."> opens on a click anywhere in the row,
+// except on its own controls (dropdowns, buttons, tick boxes, links keep their job).
+// The name link inside the row stays for keyboard users.
+document.addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-href]')
+  if (!tr || e.target.closest('a, button, select, input, textarea, label') || getSelection().toString()) return
+  location.hash = tr.dataset.href
+})
 supabase.auth.onAuthStateChange(() => setTimeout(() => { route(); flush() })) // setTimeout: awaiting supabase inside this callback can deadlock; flush: upload saved readings after sign-in
 addEventListener('hashchange', route)

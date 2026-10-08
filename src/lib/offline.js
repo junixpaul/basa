@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { warmWhisper } from './speech.js'
+import { lessonFor } from './levels.js'
 
 // Offline-first helpers: readings saved on the device while offline and uploaded later,
 // the header status pill, and "Get ready for offline" (pre-loads every page's data + speech model).
@@ -9,12 +10,12 @@ const write = q => { try { localStorage.setItem(KEY, JSON.stringify(q)) } catch 
 export const pending = () => read().length
 const isNetwork = e => !navigator.onLine || /fetch|network|load failed/i.test(e?.message ?? '')
 
-// Saves a reading. Online: straight to Supabase, returns { level }. Offline: queued, returns { queued: true }.
+// Saves a reading. Online: straight to Supabase, returns { after: { level, family_no } }. Offline: queued, returns { queued: true }.
 export async function saveAttempt(args) {
   const row = { ...args, p_at: args.p_at ?? new Date().toISOString() }
   if (navigator.onLine) {
     const { data, error } = await supabase.rpc('record_attempt', row)
-    if (!error) return { level: data }
+    if (!error) return { after: data } // { level, family_no } after the reading
     if (!isNetwork(error)) throw error
   }
   write([...read(), row])
@@ -61,9 +62,9 @@ export async function prepareOffline(say) {
   say('Saving classes, students and lessons…')
   for (const p of ['dashboard', 'students', 'lessons', 'setup']) await page(p)
   const [{ data: secs }, { data: lessons }, { data: studs }] = await Promise.all([
-    supabase.from('sections').select('id'),
-    supabase.from('lessons').select('id, level').order('created_at', { ascending: false }),
-    supabase.from('students').select('id, level'),
+    supabase.from('sections').select('id').is('archived_at', null),
+    supabase.from('lessons').select('id, level, family, family_no').is('archived_at', null).order('created_at', { ascending: false }),
+    supabase.from('students').select('id, level, family_no').is('archived_at', null),
   ])
   let prev = null
   try { prev = localStorage.getItem('class') } catch {}
@@ -72,7 +73,7 @@ export async function prepareOffline(say) {
   for (const [i, l] of (lessons ?? []).entries()) { say(`Saving lessons ${i + 1}/${lessons.length}…`); await page('player', [l.id]) }
   for (const [i, st] of (studs ?? []).entries()) {
     say(`Saving students ${i + 1}/${studs.length}…`)
-    const l = lessons?.find(x => x.level === st.level) // the lesson the Read button opens
+    const l = lessonFor(lessons, st) // the lesson the Read button opens
     if (l) await page('assess', [st.id, l.id])
     await page('progress', [st.id])
   }

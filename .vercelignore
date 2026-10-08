@@ -1,0 +1,11 @@
+.claude
+.superpowers
+node_modules
+tests
+spike
+docs
+supabase
+dev.py
+package-lock.json
+yarn.lock
+.env*

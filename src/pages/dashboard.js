@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase.js'
-import { LEVELS, MAX_LEVEL, PASS_SCORE } from '../lib/levels.js'
+import { MAX_LEVEL, PASS_SCORE, familyNames, familyLabel, studentLabel } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
 import { prepareOffline } from '../lib/offline.js'
 
@@ -12,11 +12,14 @@ const remembered = () => { try { return localStorage.getItem('dashClass') || '' 
 // offline copy always matches; add a server-side date view when a teacher has many thousands.
 export async function render(el) {
   const since = Date.now() - 30 * DAY
-  const [{ data: sections }, { data: allStudents }, { data: everyAttempt }] = await Promise.all([
-    supabase.from('sections').select('id, name').order('name'),
-    supabase.from('students').select('id, name, level, section_id').order('name'),
+  const [{ data: sections }, { data: allStudents }, { data: everyAttempt }, { data: lessons }] = await Promise.all([
+    supabase.from('sections').select('id, name').is('archived_at', null).order('name'),
+    supabase.from('students').select('id, name, level, family_no, section_id').is('archived_at', null).order('name'),
     supabase.from('attempts').select('student_id, score, passed, created_at'),
+    supabase.from('lessons').select('id, level, family, family_no').is('archived_at', null).order('created_at', { ascending: false }),
   ])
+  const fams = familyNames(lessons)
+  const progress = s => s.family_no * 10 + s.level // further family first, then further step
   const allAttempts = everyAttempt.filter(a => Date.parse(a.created_at) > since)
   const cls = sections.some(s => s.id === remembered()) ? remembered() : ''
   const students = allStudents.filter(s => !cls || s.section_id === cls)
@@ -31,11 +34,15 @@ export async function render(el) {
     const last = mine.reduce((m, a) => Math.max(m, Date.parse(a.created_at)), 0)
     return { ...s, n: mine.length, avg: mine.length ? avg(mine.map(a => a.score)) : null, last }
   })
-  const top = stats.filter(s => s.n).sort((a, b) => b.level - a.level || b.avg - a.avg).slice(0, 5)
+  const top = stats.filter(s => s.n).sort((a, b) => progress(b) - progress(a) || b.avg - a.avg).slice(0, 5)
   const help = stats.filter(s => s.level < MAX_LEVEL && (s.avg === null || s.avg < PASS_SCORE || s.last < Date.now() - 14 * DAY))
     .sort((a, b) => (a.avg ?? -1) - (b.avg ?? -1)).slice(0, 5)
-  const perLevel = Array.from({ length: MAX_LEVEL }, (_, i) => students.filter(s => s.level === i + 1).length)
-  const maxLevelCount = Math.max(1, ...perLevel)
+  // one bar per word family that has students (32 families would be too many bars), plus "All levels done"
+  const perLevel = [...new Set(students.filter(s => s.level < MAX_LEVEL).map(s => s.family_no))].sort((a, b) => a - b)
+    .map(no => [familyLabel(no, fams), students.filter(s => s.level < MAX_LEVEL && s.family_no === no).length])
+  const done = students.filter(s => s.level >= MAX_LEVEL).length
+  if (done) perLevel.push(['All levels done', done])
+  const maxLevelCount = Math.max(1, ...perLevel.map(([, n]) => n))
 
   const tile = (label, value, note = '') => `<div class="tile"><span class="muted">${label}</span><b>${value}</b>${note ? `<span class="muted small">${note}</span>` : ''}</div>`
   const who = s => `<a href="#/students/${s.id}">${esc(s.name)}</a><span class="muted small"> · ${esc(className[s.section_id] ?? '')}</span>`
@@ -59,20 +66,20 @@ export async function render(el) {
 
     <h2>Students per level</h2>
     <div class="bars" role="table" aria-label="Students per level">
-      ${perLevel.map((n, i) => `<div class="bar-row" role="row">
-        <span role="rowheader">${i + 1 < MAX_LEVEL ? `Level ${i + 1} · ${LEVELS[i + 1]}` : 'Finished'}</span>
+      ${perLevel.map(([label, n]) => `<div class="bar-row" role="row">
+        <span role="rowheader">${esc(label)}</span>
         <span class="bar-track" title="${n} student${n === 1 ? '' : 's'}">${n ? `<span class="bar" style="width:${(n / maxLevelCount) * 100}%"></span>` : ''}</span>
         <b role="cell">${n}</b></div>`).join('')}
-    </div>
+    </div>${perLevel.length ? '' : '<p class="muted">No students yet.</p>'}
 
     <div class="cols">
       <section><h2>Top students</h2><p class="muted small">Highest level, then best average score (last 30 days).</p>
         ${top.length ? `<table><thead><tr><th>Student</th><th>Level</th><th>Avg</th></tr></thead><tbody>
-          ${top.map(s => `<tr><td>${who(s)}</td><td>${s.level < MAX_LEVEL ? s.level : 'Done'}</td><td>${pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
+          ${top.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${esc(studentLabel(s, fams))}</td><td>${pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
           : '<p class="muted">No readings yet.</p>'}</section>
       <section><h2>Needs help</h2><p class="muted small">Below the pass mark, or no reading in 14 days.</p>
         ${help.length ? `<table><thead><tr><th>Student</th><th>Level</th><th>Avg</th></tr></thead><tbody>
-          ${help.map(s => `<tr><td>${who(s)}</td><td>${s.level}</td><td>${s.avg === null ? '<span class="muted">no reading</span>' : pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
+          ${help.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${esc(studentLabel(s, fams))}</td><td>${s.avg === null ? '<span class="muted">no reading</span>' : pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
           : '<p class="muted">Everyone is on track.</p>'}</section>
     </div>`
 

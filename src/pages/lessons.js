@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase.js'
-import { LEVELS } from '../lib/levels.js'
+import { LEVELS, familyNames, familyLabel, stageLabel } from '../lib/levels.js'
 import { synthCeb } from '../lib/speech.js'
-import { esc, $, armed } from '../app.js'
+import { esc, $, ask } from '../app.js'
 
 const LANGS = { 'en-US': 'English', 'fil-PH': 'Tagalog / Filipino', 'ceb-PH': 'Bisaya / Cebuano' }
 let pending = null // draft handed over from the file drop (Task 7)
@@ -10,7 +10,12 @@ export const openDraft = draft => { pending = draft; location.hash = '#/lessons/
 export function render(el, [id]) { return id ? editor(el, id) : list(el) }
 
 async function list(el) {
-  const { data } = await supabase.from('lessons').select('*').order('level').order('created_at')
+  const { data } = await supabase.from('lessons').select('*').is('archived_at', null).order('family_no', { nullsFirst: true }).order('level').order('created_at')
+  const fams = familyNames(data), mine = data.filter(l => l.teacher_id)
+  let show = ''
+  try { show = sessionStorage.getItem('lessonFilter') ?? '' } catch {}
+  // no saved choice: your own lessons first if you have any, else start teachers at built-in Level 1
+  if (!show || (show === 'mine' && !mine.length)) show = mine.length ? 'all' : '1'
   el.innerHTML = `<div class="row head"><h1>Lessons</h1>
       <button id="newBtn" class="primary" aria-expanded="false" aria-controls="newPanel" style="margin-left:auto">+ New lesson</button></div>
     <div id="newPanel" class="addbox" hidden>
@@ -18,15 +23,37 @@ async function list(el) {
       <div class="row" style="margin:0"><a href="#/lessons/new"><button>Type the words myself</button></a><span class="muted">or make it from a file:</span></div>
       <div id="drop"></div>
     </div>
-    <table><thead><tr><th>Level</th><th>Title</th><th>Language</th><th></th></tr></thead><tbody>
-    ${data.map(l => `<tr><td>${l.level} · ${LEVELS[l.level]}</td><td>${esc(l.title)}</td><td>${esc(LANGS[l.language] ?? l.language)}</td>
-      <td><a href="#/play/${l.id}">Open</a> · <a href="#/lessons/${l.id}">Edit</a></td></tr>`).join('')}
-    </tbody></table>${data.length ? '' : '<p class="muted">No lessons yet.</p>'}`
+    <div class="row"><label for="lf">Show</label><select id="lf">
+      <option value="mine">My lessons (${mine.length})</option>
+      ${Object.keys(fams).map(Number).sort((a, b) => a - b).map(n => `<option value="${n}">${esc(familyLabel(n, fams))}</option>`).join('')}
+      <option value="all">All lessons</option></select></div>
+    <div id="lrows"></div>`
+  // one card per level, its stages in order: "Level 1 · -at" → Stage 1 · Words … Stage 4 · Short Story — title
+  const name = l => !l.family_no ? esc(l.title) // own lesson: its title is the name
+    : l.level === 4 ? `“${esc(l.title)}”` : ''
+  const row = l => `<tr data-href="#/play/${l.id}"><td><b>${stageLabel(l.level)}</b>${name(l) ? `<br><span class="muted">${name(l)}</span>` : ''}</td>
+      <td class="nowrap" style="text-align:right">${l.teacher_id ? `<a href="#/lessons/${l.id}"><button>Edit</button></a> ` : ''}<a href="#/play/${l.id}"><button class="primary">Open</button></a></td></tr>`
+  const group = (title, ls) => `<section class="lvl"><h2>${title}</h2><table><tbody>${ls.map(row).join('')}</tbody></table></section>`
+  const draw = () => {
+    // "My lessons" with none of your own yet → show the built-in ones instead of nothing
+    const fallback = show === 'mine' && !mine.length
+    const rows = fallback ? data.filter(l => !l.teacher_id)
+      : data.filter(l => show === 'all' || (show === 'mine' ? l.teacher_id : l.family_no === +show))
+    const own = rows.filter(l => !l.family_no), byLevel = {}
+    for (const l of rows.filter(l => l.family_no)) (byLevel[l.family_no] ??= []).push(l)
+    $('#lrows', el).innerHTML = (fallback ? `<p class="muted">You haven't made any lessons yet. Here are the lessons that come with Basa, ready to use.</p>` : '')
+      + (own.length ? group('My lessons <span class="muted small">· any level</span>', own) : '')
+      + Object.keys(byLevel).map(Number).sort((a, b) => a - b).map(n => group(esc(familyLabel(n, fams)), byLevel[n])).join('')
+      || `<p class="muted">${show === 'mine' ? "You haven't made any lessons yet." : 'No lessons.'}</p>`
+  }
+  $('#lf', el).value = show
+  $('#lf', el).onchange = e => { show = e.target.value; try { sessionStorage.setItem('lessonFilter', show) } catch {} draw() }
+  draw()
   ;(await import('./drop.js')).mountDrop($('#drop', el), openDraft)
   const panel = $('#newPanel', el), btn = $('#newBtn', el)
   const open = on => { panel.hidden = !on; btn.textContent = on ? '✕ Close' : '+ New lesson'; btn.setAttribute('aria-expanded', on) }
   btn.onclick = () => open(panel.hidden)
-  if (!data.length) open(true) // no lessons yet: show how to make one
+  if (!mine.length && show === 'mine') open(true) // no own lessons yet: show how to make one
 }
 
 async function editor(el, id) {
@@ -38,6 +65,12 @@ async function editor(el, id) {
       supabase.from('lesson_items').select('*').eq('lesson_id', id).order('position'),
     ])
     lesson = l; items = its
+    if (l && !l.teacher_id) { // built-in lessons are shared by every teacher, so they are read-only
+      el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/lessons"><button>← All lessons</button></a></div>
+        <h1>Basa lesson</h1><p class="muted">"${esc(l.title)}" comes with Basa and can't be edited. Make your own with <b>+ New lesson</b>.</p>
+        <div class="row"><a href="#/play/${l.id}"><button class="primary">Open lesson</button></a></div>`
+      return
+    }
   }
   const texts = items.filter(i => !i.image_path && !i.image).map(i => i.text).join('\n')
   const pics = items.filter(i => i.image_path || i.image)
@@ -47,8 +80,8 @@ async function editor(el, id) {
     <h1>${id === 'new' ? 'New lesson' : 'Edit lesson'}</h1>
     <form id="f">
       <div class="row"><label>Title <input name="title" required value="${esc(lesson.title)}"></label></div>
-      <div class="row"><label>Level <select name="level">${Object.entries(LEVELS).map(([n, t]) =>
-        `<option value="${n}" ${+n === lesson.level ? 'selected' : ''}>${n} · ${t}</option>`).join('')}</select></label>
+      <div class="row"><label>Stage <select name="level">${Object.keys(LEVELS).map(n =>
+        `<option value="${n}" ${+n === lesson.level ? 'selected' : ''}>${stageLabel(+n)}</option>`).join('')}</select></label>
         <label>Language <select name="lang">${Object.entries(LANGS).map(([c, t]) =>
           `<option value="${c}" ${c === lesson.language ? 'selected' : ''}>${t}</option>`).join('')}
           <option value="other" ${other ? 'selected' : ''}>Other…</option></select></label>
@@ -72,9 +105,9 @@ async function editor(el, id) {
   }
   pics.forEach(addPic)
   $('#addPic', el).onclick = () => addPic()
-  $('#del', el)?.addEventListener('click', async e => {
-    if (!armed(e.currentTarget)) return
-    await supabase.from('lessons').delete().eq('id', id); location.hash = '#/lessons'
+  $('#del', el)?.addEventListener('click', async () => {
+    if (!await ask('Delete this lesson?', 'Are you sure? It moves to the Archive, where you can restore it.', 'Delete lesson')) return
+    await supabase.from('lessons').update({ archived_at: new Date().toISOString() }).eq('id', id); location.hash = '#/lessons'
   })
 
   f.onsubmit = async e => {
