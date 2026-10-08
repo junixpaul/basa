@@ -57,7 +57,7 @@ begin
   if exists (select 1 from lessons where teacher_id is null) then return; end if; -- seed once
   for f in select value from jsonb_array_elements(data) loop
     n := n + 1;
-    titles := array[f->>0 || ' · Words', f->>0 || ' · Phrases', f->>0 || ' · Sentences', f->>4];
+    titles := array['CVC ' || (f->>0) || ' · Words', 'CVC ' || (f->>0) || ' · Phrases', 'CVC ' || (f->>0) || ' · Sentences', f->>4];
     lists := jsonb_build_array(f->1, f->2, f->3, f->5);
     for step in 1..4 loop
       insert into lessons (teacher_id, title, level, language, family, family_no)

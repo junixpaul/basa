@@ -17,7 +17,7 @@ export async function render(el, [id]) {
   const { data: signed } = paths.length ? await supabase.storage.from('lesson-images').createSignedUrls(paths, 3600) : { data: [] }
   const url = Object.fromEntries((signed ?? []).map(s => [s.path, s.signedUrl]))
 
-  const where = (lesson.family_no ? `Level ${lesson.family_no} · ${esc(lesson.family)} family · ` : '') + `Stage ${lesson.level} · ${LEVELS[lesson.level]}`
+  const where = (lesson.family_no ? `Level ${lesson.family_no} · CVC ${esc(lesson.family)} · ` : '') + `Stage ${lesson.level} · ${LEVELS[lesson.level]}`
   el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/lessons"><button>← All lessons</button></a>
       <a href="#/lessons/new" style="margin-left:auto"><button>+ New lesson</button></a></div>
     <p class="muted">${where}</p><h1>${esc(lesson.title)}</h1>

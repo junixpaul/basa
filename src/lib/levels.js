@@ -12,7 +12,7 @@ export const levelLabel = n => (n >= MAX_LEVEL ? 'Finished' : `Level ${n} · ${L
 // is Words → Phrases → Sentences → Short Story (students.level 1-4; 5 = every family done).
 // `fams` maps family_no → family name, built from the lessons list.
 export const familyNames = lessons => Object.fromEntries((lessons ?? []).filter(l => l.family_no).map(l => [l.family_no, l.family]))
-export const familyLabel = (no, fams) => `Level ${no}${fams?.[no] ? ` · ${fams[no]} family` : ''}`
+export const familyLabel = (no, fams) => `Level ${no}${fams?.[no] ? ` · CVC ${fams[no]}` : ''}`
 export const stageLabel = n => n >= MAX_LEVEL ? 'Level complete' : `Stage ${n} · ${LEVELS[n]}`
 export const studentLabel = (s, fams) => s.level >= MAX_LEVEL ? 'All levels done' : `${familyLabel(s.family_no, fams)} · ${stageLabel(s.level)}`
 // The lesson a student reads next: their family + step; a teacher's own lesson without a family at that step as fallback.

@@ -29,6 +29,6 @@ test('lessonFor picks the family lesson, falls back to an own lesson, skips one 
 })
 
 test('labels', () => {
-  assert.equal(studentLabel({ family_no: 2, level: 1 }, { 2: '-an' }), 'Level 2 · -an family · Stage 1 · Words')
+  assert.equal(studentLabel({ family_no: 2, level: 1 }, { 2: '-an' }), 'Level 2 · CVC -an · Stage 1 · Words')
   assert.equal(studentLabel({ family_no: 2, level: 5 }, {}), 'All levels done')
 })
