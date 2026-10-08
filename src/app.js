@@ -1,22 +1,24 @@
 import { supabase } from './lib/supabase.js'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js'
 import { startOffline, flush, pending } from './lib/offline.js'
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 export const $ = (sel, el = document) => el.querySelector(sel)
 
-// Two-tap confirm for destructive buttons. Native confirm()/prompt() are blocked in some
-// embedded browsers, so never use them. Returns true on the second tap within 3 s.
-export function armed(btn) {
-  if (btn.dataset.armed) return true
-  const label = btn.textContent
-  btn.dataset.armed = 1; btn.textContent = 'Tap again to confirm'; btn.classList.add('danger')
-  setTimeout(() => { delete btn.dataset.armed; btn.textContent = label; btn.classList.remove('danger') }, 3000)
-  return false
+// Confirmation box (native <dialog>: backdrop, Esc and focus handling built in). Resolves true on OK.
+export function ask(title, body, okLabel) {
+  const dlg = $('#askDlg')
+  $('#askTitle').textContent = title; $('#askBody').textContent = body; $('#askOk').textContent = okLabel
+  dlg.returnValue = ''
+  dlg.showModal()
+  return new Promise(done => dlg.addEventListener('close', () => done(dlg.returnValue === 'ok'), { once: true }))
 }
+
 
 const routes = [
   [/^#\/$/, () => import('./pages/sections.js')],
   [/^#\/setup$/, () => import('./pages/setup.js')],
+  [/^#\/archive$/, () => import('./pages/archive.js')],
   [/^#\/students$/, () => import('./pages/students.js')],
   [/^#\/students\/([\w-]+)$/, () => import('./pages/progress.js')],
   [/^#\/dashboard$/, () => import('./pages/dashboard.js')],
@@ -54,7 +56,17 @@ async function login(el) {
   // msg moves next to whatever it is about, so errors sit under their field
   const say = (text, kind = '', near = $('#link', el)) => { (near.closest('.pw') || near).after(msg); msg.textContent = text; msg.className = kind }
   el.querySelectorAll('[data-p]').forEach(b => b.onclick = async () => {
-    b.disabled = true; say('Opening ' + b.textContent.replace('Continue with ', '') + '…', '', b)
+    const name = b.textContent.replace('Continue with ', '')
+    b.disabled = true; say(`Opening ${name}…`, '', b)
+    // signInWithOAuth only redirects the browser; a provider that isn't switched on in Supabase would land
+    // on a raw JSON error page. Ask Supabase first so we can show a readable message instead.
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } })
+      if (r.ok && !(await r.json()).external?.[b.dataset.p]) {
+        b.disabled = false
+        return say(`${name} sign-in isn't set up yet. Use email and password, or ask the administrator to turn it on.`, 'bad', b)
+      }
+    } catch {} // offline or blocked: fall through and let the normal flow report it
     const { error } = await supabase.auth.signInWithOAuth({ provider: b.dataset.p, options: { redirectTo: location.origin + location.pathname } })
     if (error) { b.disabled = false; say(error.message, 'bad', b) }
   })
@@ -144,7 +156,7 @@ async function route() {
   document.body.classList.toggle('signed-out', !session)
   if (!session) return login(el)
   // highlight the menu item for this page; reading pages belong to their section
-  const page = { assess: '#/', play: '#/lessons', students: '#/students' }[hash.split('/')[1]] || hash.match(/^#\/\w*/)[0]
+  const page = { assess: '#/', play: '#/lessons', students: '#/students', archive: '#/setup' }[hash.split('/')[1]] || hash.match(/^#\/\w*/)[0]
   document.querySelectorAll('header nav a').forEach(a =>
     a.getAttribute('href') === page ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'))
   for (const [re, load] of routes) {
@@ -187,7 +199,17 @@ $('#outDlg').onclose = async () => {
   await caches?.delete('basa-data').catch(() => {})
   supabase.auth.signOut()
 }
-$('#outDlg').onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close('cancel') } // tap the dim backdrop to cancel
+for (const d of ['#outDlg', '#askDlg']) // tap the dim backdrop to cancel
+  $(d).onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close('cancel') }
 startOffline()
+
+// Clickable list rows: <tr data-href="#/..."> opens on a click anywhere in the row,
+// except on its own controls (dropdowns, buttons, tick boxes, links keep their job).
+// The name link inside the row stays for keyboard users.
+document.addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-href]')
+  if (!tr || e.target.closest('a, button, select, input, textarea, label') || getSelection().toString()) return
+  location.hash = tr.dataset.href
+})
 supabase.auth.onAuthStateChange(() => setTimeout(() => { route(); flush() })) // setTimeout: awaiting supabase inside this callback can deadlock; flush: upload saved readings after sign-in
 addEventListener('hashchange', route)

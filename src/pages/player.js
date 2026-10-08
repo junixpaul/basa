@@ -17,9 +17,11 @@ export async function render(el, [id]) {
   const { data: signed } = paths.length ? await supabase.storage.from('lesson-images').createSignedUrls(paths, 3600) : { data: [] }
   const url = Object.fromEntries((signed ?? []).map(s => [s.path, s.signedUrl]))
 
-  el.innerHTML = `<p class="muted">Level ${lesson.level} · ${LEVELS[lesson.level]}</p><h1>${esc(lesson.title)}</h1>
-    <div class="row"><button class="primary" id="all">▶ Read all</button><a href="#/lessons/${id}"><button>Edit</button></a>
-      <span style="margin-left:auto"><a href="#/lessons"><button>All lessons</button></a> <a href="#/lessons/new"><button>+ New lesson</button></a></span></div>
+  const where = (lesson.family_no ? `Level ${lesson.family_no} · ${esc(lesson.family)} family · ` : '') + `Stage ${lesson.level} · ${LEVELS[lesson.level]}`
+  el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/lessons"><button>← All lessons</button></a>
+      <a href="#/lessons/new" style="margin-left:auto"><button>+ New lesson</button></a></div>
+    <p class="muted">${where}</p><h1>${esc(lesson.title)}</h1>
+    <div class="row"><button class="primary" id="all">▶ Read all</button>${lesson.teacher_id ? `<a href="#/lessons/${id}"><button>Edit</button></a>` : ''}</div>
     <p id="note" class="note" hidden></p>
     <div class="big">${items.map((it, i) => `<button class="item" data-i="${i}" style="border:0;background:none" aria-label="Hear: ${esc(it.text)}">
       ${it.image_path ? `<img src="${esc(url[it.image_path])}" alt="${esc(it.text)}">` : esc(it.text)}</button>`).join('')}</div>`

@@ -1,14 +1,14 @@
 import { supabase } from '../lib/supabase.js'
-import { esc, $, armed } from '../app.js'
+import { esc, $, ask } from '../app.js'
 
 const GRADES = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']
 
 // Grade level + section setup. Required and unique are enforced by the DB (migration 0002).
 export async function render(el) {
-  const { data: sections, error } = await supabase.from('sections').select('id, grade, section').order('section')
+  const { data: sections, error } = await supabase.from('sections').select('id, grade, section').is('archived_at', null).order('section')
   if (error) { el.innerHTML = `<p class="bad">${esc(error.message)}</p>`; return }
 
-  el.innerHTML = `<h1>Setup</h1>
+  el.innerHTML = `<div class="row head"><h1>Setup</h1><a href="#/archive" style="margin-left:auto"><button>Archive</button></a></div>
     <p class="muted">Add each grade level and section you teach. Every section becomes a class.</p>
     <form id="add" class="row" novalidate>
       <select name="grade" required aria-label="Grade level"><option value="">Grade level</option>${GRADES.map(g => `<option>${g}</option>`).join('')}</select>
@@ -57,10 +57,14 @@ export async function render(el) {
         error ? fail(why(error, grade, section), input) : render(el)
       }
     }
-    $('[data-del]', tr).onclick = async e => {
-      if (!armed(e.currentTarget)) return
-      const { error } = await supabase.from('sections').delete().eq('id', id)
-      error ? fail(error.message) : render(el)
+    $('[data-del]', tr).onclick = async () => {
+      const name = `${grade} – ${tr.cells[0].textContent}`
+      if (!await ask(`Delete ${name}?`, 'Are you sure? The class and its students move to the Archive, where you can restore them.', 'Delete class')) return
+      const at = new Date().toISOString()
+      const { error } = await supabase.from('sections').update({ archived_at: at }).eq('id', id)
+      if (error) return fail(error.message)
+      await supabase.from('students').update({ archived_at: at }).eq('section_id', id).is('archived_at', null)
+      render(el)
     }
   })
 }
