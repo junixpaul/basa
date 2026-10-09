@@ -23,9 +23,13 @@ export async function render(el, [studentId, lessonId]) {
   ])
   const fams = familyNames(lessons)
   const target = items.map(i => i.text).join(' ')
+  // Stages 1-3 (Words, Phrases, Sentences): one item per line. Stage 4 (Short Story) stays a paragraph.
+  const stacked = lesson.level < 4
+  const lineEnds = new Set() // index of the last word of each item
+  items.reduce((n, i) => (lineEnds.add(n + i.text.split(/\s+/).filter(Boolean).length - 1), n + i.text.split(/\s+/).filter(Boolean).length), 0)
   el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/"><button>← Back to classes</button></a></div>
     <p class="muted">${esc(student.name)} · ${esc(studentLabel(student, fams))}</p><h1>${esc(lesson.title)}</h1>
-    <p class="big" id="text">${esc(target)}</p>
+    <p class="big${stacked ? ' stack' : ''}" id="text">${stacked ? '' : esc(target)}</p>
     <div class="row"><button class="primary" id="go">🎤 Start reading</button><button id="hear">🔊 Read the words</button><button id="stop" hidden>■ Stop</button><span id="msg" role="status"></span></div>`
   const go = $('#go', el), stop = $('#stop', el), msg = $('#msg', el), hear = $('#hear', el)
 
@@ -42,12 +46,16 @@ export async function render(el, [studentId, lessonId]) {
   addEventListener('hashchange', () => speaking && hush(), { once: true }) // leaving the page stops the voice
   const mark = w => `<span class="w ${w.cls}">${esc(w.text)}${w.cls ? `<sup aria-label="${w.cls === 'ok' ? 'correct' : 'missed'}">${w.cls === 'ok' ? '✓' : '✗'}</sup>` : ''}</span>`
 
+  // words → HTML; in stacked mode a line break follows the last word of each item
+  const paint = words => words.map((w, i) => mark(w) + (stacked && lineEnds.has(i) ? '<br>' : '')).join('')
+  if (stacked) $('#text', el).innerHTML = paint(target.split(/\s+/).filter(Boolean).map(text => ({ text, cls: '' })))
+
   // Live: heard words turn ✓; words the reader already passed without a match turn ✗; the rest wait.
   // Returns true once the last word is read, which stops listening.
   const live = heard => {
     const { words } = scoreReading(target, heard)
     const reached = words.findLastIndex(w => w.ok)
-    $('#text', el).innerHTML = words.map((w, i) => mark({ text: w.text, cls: w.ok ? 'ok' : i < reached ? 'bad' : '' })).join('')
+    $('#text', el).innerHTML = paint(words.map((w, i) => ({ text: w.text, cls: w.ok ? 'ok' : i < reached ? 'bad' : '' })))
     return words.length > 0 && words.at(-1).ok
   }
 
@@ -83,7 +91,7 @@ export async function render(el, [studentId, lessonId]) {
 
     const r = scoreReading(target, heard)
     const passed = r.score >= passScore(lesson.language)
-    $('#text', el).innerHTML = r.words.map(w => mark({ text: w.text, cls: w.ok ? 'ok' : 'bad' })).join('')
+    $('#text', el).innerHTML = paint(r.words.map(w => ({ text: w.text, cls: w.ok ? 'ok' : 'bad' })))
     msg.textContent = `Score ${Math.round(r.score * 100)}% — saving…`
     let saved
     try {
