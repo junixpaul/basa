@@ -109,6 +109,8 @@
   @media (max-width:640px) { .stepper { flex-wrap:nowrap; gap:2px } .stepper li { min-width:0; font-size:12px } .stepper .dot { width:30px; height:30px } }
   .now-on { padding:12px 16px; background:var(--hover); border:2px solid var(--primary); border-radius:var(--radius) } .now-on b { font-size:20px }
   td { vertical-align:middle } .nowrap { white-space:nowrap } tr[data-href] { cursor:pointer }
+  /* Words / Phrases / Sentences: one item per line */
+  .big.stack { text-align:left } .big.stack .item.txt { display:block; margin:4px 0; padding:2px 6px !important; font:inherit; color:inherit; text-align:left }
   /* lesson words use the reading font everywhere: typing them, picture labels, missed words, what was heard */
   textarea[name=items], input[aria-label="Picture label"], .chip, .bad-words, td details { font-family:Andika, Nunito, sans-serif }
   textarea[name=items], input[aria-label="Picture label"] { font-weight:400 } textarea[name=items] { font-size:20px; line-height:1.6 } td details summary { font-family:Nunito, sans-serif }

@@ -23,7 +23,7 @@ export async function render(el, [id]) {
     <p class="muted">${where}</p><h1>${esc(lesson.title)}</h1>
     <div class="row"><button class="primary" id="all">▶ Read all</button>${lesson.teacher_id ? `<a href="#/lessons/${id}"><button>Edit</button></a>` : ''}</div>
     <p id="note" class="note" hidden></p>
-    <div class="big">${items.map((it, i) => `<button class="item" data-i="${i}" style="border:0;background:none" aria-label="Hear: ${esc(it.text)}">
+    <div class="big${lesson.level < 4 ? ' stack' : ''}">${items.map((it, i) => `<button class="item${it.image_path ? '' : ' txt'}" data-i="${i}" style="border:0;background:none" aria-label="Hear: ${esc(it.text)}">
       ${it.image_path ? `<img src="${esc(url[it.image_path])}" alt="${esc(it.text)}">` : esc(it.text)}</button>`).join('')}</div>`
 
   let audio
