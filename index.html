@@ -199,6 +199,8 @@
   .who { display:flex; gap:16px; align-items:center; flex-wrap:wrap }
   .avatar { width:84px; height:84px; border-radius:50%; object-fit:cover; display:grid; place-items:center; background:var(--primary); color:var(--primary-fg); font:800 36px/1 "Baloo 2", Nunito, sans-serif; border:3px solid var(--card); box-shadow:var(--clay) }
   .cols p { text-wrap:balance }
+  .hello { display:flex; gap:16px; align-items:center } .hello h1 { margin:0 } .hello p { margin:4px 0 0 }
+  .avatar.sm { width:64px; height:64px; flex:none; font-size:26px }
   .prof { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px 24px } .prof .who, .prof .wide { grid-column:1 / -1 } .prof label { display:block; margin-bottom:6px } .prof input, .prof select { width:100% } .prof .row { margin:0 }
   /* walkthrough card */
   #tour { position:fixed; z-index:20; transition:top .25s ease-out, left .25s ease-out; width:min(420px, calc(100% - 32px)); padding:20px 24px; background:var(--card); border:2px solid var(--primary); border-radius:24px; box-shadow:var(--clay); animation:pop .2s ease-out }

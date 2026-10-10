@@ -9,3 +9,13 @@ export async function saveAvatar(userId, file) {
   if (error) throw error
 }
 export const avatarUrl = async path => (await supabase.storage.from('lesson-images').createSignedUrl(path, 3600)).data?.signedUrl
+
+// The teacher's picture if they added one, else their initials ("Maria Santos" → MS, "pauldo@…" → P).
+export async function avatarHtml(user, cls = 'avatar') {
+  const m = user?.user_metadata ?? {}
+  const pic = m.avatar ? await avatarUrl(m.avatar).catch(() => '') : '' // offline: no URL, initials instead
+  if (pic) return `<img class="${cls}" src="${pic.replace(/"/g, '&quot;')}" alt="">`
+  const words = (m.name?.trim() || user?.email?.split('@')[0] || '?').split(/\s+/)
+  const initials = (words[0][0] + (words.length > 1 ? words.at(-1)[0] : '')).toUpperCase()
+  return `<span class="${cls}" aria-hidden="true">${initials.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)}</span>`
+}

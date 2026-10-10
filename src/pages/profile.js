@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import { GRADES } from '../lib/levels.js'
-import { saveAvatar, avatarUrl } from '../lib/avatar.js'
+import { saveAvatar, avatarHtml } from '../lib/avatar.js'
 import { prepareOffline } from '../lib/offline.js'
 import { esc, $, askSignOut } from '../app.js'
 
@@ -8,13 +8,13 @@ import { esc, $, askSignOut } from '../app.js'
 export async function render(el) {
   const { data } = await supabase.auth.getSession()
   const user = data.session?.user, m = user?.user_metadata ?? {}
-  const pic = m.avatar ? await avatarUrl(m.avatar).catch(() => '') : ''
+  const face = await avatarHtml(user)
   let ready = 0
   try { ready = +localStorage.getItem('offlineReady') || 0 } catch {}
   const dark = () => document.documentElement.dataset.theme === 'dark'
   el.innerHTML = `<h1>Profile</h1>
     <form id="pf" class="prof" novalidate>
-      <div class="who">${pic ? `<img class="avatar" src="${esc(pic)}" alt="Your picture">` : `<span class="avatar" aria-hidden="true">${esc((m.name || user?.email || '?')[0].toUpperCase())}</span>`}
+      <div class="who">${face}
         <div><b>${esc(user?.email ?? '')}</b><br><span class="muted small">Your sign-in email</span></div></div>
       <div><label for="name">Your name</label>
         <input id="name" value="${esc(m.name ?? '')}" autocomplete="name" required></div>

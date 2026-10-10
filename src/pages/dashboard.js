@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import { MAX_LEVEL, passFor, familyNames, familyLabel, stageLabel } from '../lib/levels.js'
+import { avatarHtml } from '../lib/avatar.js'
 import { esc, $ } from '../app.js'
 
 const DAY = 864e5
@@ -54,8 +55,9 @@ export async function render(el) {
   const keep = t => t.split(' · ').map(p => `<span class="nw">${esc(p)}</span>`).join(' · ') // wrap only between parts, never inside "CVC -at"
   const lvl = s => s.level >= MAX_LEVEL ? '<b>All levels done</b>' : `<b>${keep(familyLabel(s.family_no, fams))}</b><br><span class="muted">${keep(stageLabel(s.level))}</span>`
 
-  el.innerHTML = `<h1>${hello}</h1>
-    <p class="muted" style="margin-top:-8px">${sections.length ? "Welcome back. Here is how your classes are doing." : 'Welcome to Basa. Start by adding your class in <b>Setup</b>.'}</p>
+  const face = await avatarHtml(u, 'avatar sm')
+  el.innerHTML = `<div class="hello">${face}<div><h1>${hello}</h1>
+    <p class="muted">${sections.length ? "Welcome back. Here is how your classes are doing." : 'Welcome to Basa. Start by adding your class in <b>Setup</b>.'}</p></div></div>
     <div class="row head" style="margin-top:28px">
       <h2>Class overview</h2>
       <span class="row" style="margin:0 0 0 auto"><label for="dc">Class</label>
