@@ -23,16 +23,16 @@ export async function render(el) {
     </div>
     <p class="muted" id="count" role="status"></p>
     <table><thead><tr><th>Student</th><th>Class</th><th>Level</th><th></th></tr></thead><tbody id="list"></tbody></table>
-    <p class="muted">Add, move or change students in <a href="#/">Classes</a>.</p>`
+    <div class="row"><span class="muted">To add, move or change students:</span><a href="#/"><button class="primary">Go to Classes</button></a></div>`
 
   const draw = () => {
     const q = $('#q', el).value.trim().toLowerCase(), fc = $('#fc', el).value, fl = $('#fl', el).value
     const inLevel = s => !fl || (fl === 'done' ? s.level >= MAX_LEVEL : s.level < MAX_LEVEL && s.family_no === +fl)
     const shown = students.filter(s => (!q || s.name.toLowerCase().includes(q)) && (!fc || s.section_id === fc) && inLevel(s))
-    $('#count', el).textContent = `${shown.length} of ${students.length} students`
+    $('#count', el).textContent = shown.length === students.length ? `Total students: ${students.length}` : `Showing ${shown.length} of ${students.length} students`
     $('#list', el).innerHTML = shown.map(s => {
       const l = lessonFor(lessons, s)
-      return `<tr data-href="#/students/${s.id}"><td><a href="#/students/${s.id}">${esc(s.name)}</a></td><td>${esc(className[s.section_id] || '')}</td><td>${esc(studentLabel(s, fams))}</td>
+      return `<tr data-href="#/students/${s.id}"><td class="name"><a href="#/students/${s.id}">${esc(s.name)}</a></td><td>${esc(className[s.section_id] || '')}</td><td>${esc(studentLabel(s, fams))}</td>
         <td style="text-align:right">${l ? `<a href="#/assess/${s.id}/${l.id}"><button class="primary">Read</button></a>` : ''}</td></tr>`
     }).join('') || `<tr><td colspan="4" class="muted">${students.length ? 'No students match.' : 'No students yet.'}</td></tr>`
   }

@@ -17,7 +17,7 @@ Free stack, no build step: static HTML and ES modules, Supabase Free, and librar
 
 Basa installs as an app (Chrome menu → **Install Basa** / **Add to Home screen**) and keeps working without signal:
 
-1. While online, sign in and tap **Get ready for offline** on the Dashboard. It saves every class, student and lesson on the device and downloads the speech checker (~80 MB, once).
+1. While online, sign in and tap **Get ready for offline** in Profile. It saves every class, student and lesson on the device and downloads the speech checker (~80 MB, once).
 2. Offline, teachers can open those pages and run readings. Scores are saved on the device; the header shows how many are waiting.
 3. When there is signal again, saved readings upload by themselves with their real date. Sign-out waits until they have uploaded.
 

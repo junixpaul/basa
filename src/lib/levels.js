@@ -1,3 +1,4 @@
+export const GRADES = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']
 export const LEVELS = { 1: 'Words', 2: 'Phrases', 3: 'Sentences', 4: 'Short Story' }
 export const MAX_LEVEL = 5
 export const PASS_SCORE = 0.8
@@ -6,6 +7,9 @@ export const PASS_SCORE_BY_LANG = {}
 // Recognizer language used when a lesson is Bisaya; set from the Task 0 spike.
 export const CEB_LISTEN_LANG = 'fil-PH'
 export const passScore = lang => PASS_SCORE_BY_LANG[lang] ?? PASS_SCORE
+// Teacher's passing averages (Setup): cfg = { overall?, stage?: {1-4: x} }, x in 0..1.
+// This stage's own average wins, then the overall average, then the app default.
+export const passFor = (cfg, stage, lang) => cfg?.stage?.[stage] ?? cfg?.overall ?? passScore(lang)
 export const levelLabel = n => (n >= MAX_LEVEL ? 'Finished' : `Level ${n} · ${LEVELS[n]}`)
 
 // CVC families: a student's level is a family (Level 1 = -at, Level 2 = -an, ...) and their step inside it

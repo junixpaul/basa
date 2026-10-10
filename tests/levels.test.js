@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nextAfterPass, lessonFor, studentLabel } from '../src/lib/levels.js'
+import { nextAfterPass, lessonFor, studentLabel, passFor, PASS_SCORE } from '../src/lib/levels.js'
+
+test('passing average: stage beats overall beats default', () => {
+  assert.equal(passFor({}, 1, 'en-US'), PASS_SCORE)
+  assert.equal(passFor({ overall: .7 }, 1), .7)
+  assert.equal(passFor({ overall: .7, stage: { 1: .5 } }, 1), .5)
+  assert.equal(passFor({ overall: .7, stage: { 1: .5 } }, 2), .7)
+  assert.equal(passFor({ stage: { 1: .5 } }, 2), PASS_SCORE)
+})
 
 const L = (id, family_no, level) => ({ id, family_no, level, family: family_no ? ['', '-at', '-an'][family_no] : null })
 

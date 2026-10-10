@@ -1,8 +1,9 @@
 import { supabase } from '../lib/supabase.js'
 import { listen, localSpeechReady, recordAndTranscribe, speak } from '../lib/speech.js'
 import { saveAttempt } from '../lib/offline.js'
+import { getPassing } from '../lib/passing.js'
 import { scoreReading } from '../lib/score.js'
-import { passScore, MAX_LEVEL, familyNames, familyLabel, studentLabel, lessonFor, nextAfterPass } from '../lib/levels.js'
+import { passFor, MAX_LEVEL, familyNames, familyLabel, studentLabel, lessonFor, nextAfterPass } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
 
 const ERRORS = {
@@ -22,6 +23,7 @@ export async function render(el, [studentId, lessonId]) {
     supabase.from('lessons').select('id, level, family, family_no').is('archived_at', null).order('created_at', { ascending: false }),
   ])
   const fams = familyNames(lessons)
+  const need = passFor(await getPassing(), lesson.level, lesson.language)
   const target = items.map(i => i.text).join(' ')
   // Stages 1-3 (Words, Phrases, Sentences): one item per line. Stage 4 (Short Story) stays a paragraph.
   const stacked = lesson.level < 4
@@ -90,7 +92,7 @@ export async function render(el, [studentId, lessonId]) {
     if (!heard) { msg.textContent = ERRORS['no-speech']; go.hidden = false; return }
 
     const r = scoreReading(target, heard)
-    const passed = r.score >= passScore(lesson.language)
+    const passed = r.score >= need
     $('#text', el).innerHTML = paint(r.words.map(w => ({ text: w.text, cls: w.ok ? 'ok' : 'bad' })))
     msg.textContent = `Score ${Math.round(r.score * 100)}% — saving…`
     let saved
@@ -107,7 +109,7 @@ export async function render(el, [studentId, lessonId]) {
         + (passed ? '' : ` <button id="again">Try again</button>`)
       : movedUp
       ? `<b class="ok">Pasado! ${esc(studentLabel(after, fams))}</b>`
-      : passed ? 'Passed.' : `<span>Keep practicing — ${Math.round(passScore(lesson.language) * 100)}% needed.</span> <button id="again">Try again</button>`)
+      : passed ? 'Passed.' : `<span>Keep practicing — ${Math.round(need * 100)}% needed.</span> <button id="again">Try again</button>`)
     $('#again', el)?.addEventListener('click', () => render(el, [studentId, lessonId]))
     if (passed) msg.insertAdjacentHTML('beforeend', ' ' + nextStep(student, after, lessons, fams, lesson.id))
   }

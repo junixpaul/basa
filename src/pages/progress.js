@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
-import { LEVELS, MAX_LEVEL, PASS_SCORE, familyNames, familyLabel, studentLabel, lessonFor } from '../lib/levels.js'
+import { LEVELS, MAX_LEVEL, passFor, familyNames, familyLabel, studentLabel, lessonFor } from '../lib/levels.js'
+import { getPassing } from '../lib/passing.js'
 import { esc, $, ask } from '../app.js'
 
 const pct = x => `${Math.round(x * 100)}%`
@@ -7,6 +8,7 @@ const day = t => new Date(t).toLocaleDateString(undefined, { month: 'short', day
 
 // One student's progress tracker: level stepper, score trend, reading history.
 export async function render(el, [id]) {
+  const PASS_SCORE = passFor(await getPassing()) // overall passing average from Setup, else the default
   const [{ data: s }, { data: attempts }, { data: lessons }] = await Promise.all([
     supabase.from('students').select('id, name, level, family_no, sections(name)').eq('id', id).maybeSingle(),
     supabase.from('attempts').select('score, passed, result, created_at, lessons(title, level)').eq('student_id', id).order('created_at'),
@@ -44,7 +46,7 @@ export async function render(el, [id]) {
     </div>
 
     <h2>Score trend</h2>
-    ${attempts.length > 1 ? trend(attempts) : `<p class="muted">${attempts.length ? 'One reading so far. The trend shows after two.' : 'No readings yet.'}</p>`}
+    ${attempts.length > 1 ? trend(attempts, PASS_SCORE) : `<p class="muted">${attempts.length ? 'One reading so far. The trend shows after two.' : 'No readings yet.'}</p>`}
 
     ${practice.length ? `<h2>Words to practice</h2><p class="muted small">Most often missed, across all readings.</p>
       <div class="row">${practice.map(([w, n]) => `<span class="chip">${esc(w)} <b>×${n}</b></span>`).join('')}</div>` : ''}
@@ -76,7 +78,7 @@ export async function render(el, [id]) {
 }
 
 // Single-series line chart, 0–100% y axis, dashed pass line. Inline SVG; no library.
-export function trend(attempts) {
+export function trend(attempts, PASS_SCORE) {
   const W = 600, H = 200, L = 36, R = 12, T = 12, B = 24
   const x = i => L + (i / (attempts.length - 1)) * (W - L - R)
   const y = v => T + (1 - v) * (H - T - B)
@@ -86,7 +88,7 @@ export function trend(attempts) {
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score for each reading, oldest to newest">
       ${grid}
       <line x1="${L}" x2="${W - R}" y1="${y(PASS_SCORE)}" y2="${y(PASS_SCORE)}" class="pass"/>
-      <text x="${L + 6}" y="${y(PASS_SCORE) - 6}" class="pass-label">pass ${pct(PASS_SCORE)}</text>
+      <text x="${W - R}" y="${y(PASS_SCORE) - 8}" text-anchor="end" class="pass-label">pass ${pct(PASS_SCORE)}</text>
       <polyline points="${pts.map(p => p.join(',')).join(' ')}" class="line"/>
       ${attempts.map((a, i) => `<g class="pt" tabindex="0" data-x="${(pts[i][0] / W) * 100}" data-y="${(pts[i][1] / H) * 100}"
           data-tip="${day(a.created_at)} · ${esc(a.lessons?.title ?? '')} · ${pct(a.score)} ${a.passed ? '✓' : '✗'}">

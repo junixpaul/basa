@@ -79,7 +79,7 @@ async function editor(el, id) {
   el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/lessons"><button>← All lessons</button></a></div>
     <h1>${id === 'new' ? 'New lesson' : 'Edit lesson'}</h1>
     <form id="f">
-      <div class="row"><label>Title <input name="title" required value="${esc(lesson.title)}"></label></div>
+      <div class="row"><label style="flex:1">Title<br><input name="title" required value="${esc(lesson.title)}" placeholder="e.g. Animal words" style="width:100%"></label></div>
       <div class="row"><label>Stage <select name="level">${Object.keys(LEVELS).map(n =>
         `<option value="${n}" ${+n === lesson.level ? 'selected' : ''}>${stageLabel(+n)}</option>`).join('')}</select></label>
         <label>Language <select name="lang">${Object.entries(LANGS).map(([c, t]) =>
