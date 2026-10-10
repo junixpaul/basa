@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase.js'
-import { MAX_LEVEL, passFor, familyNames, familyLabel, studentLabel } from '../lib/levels.js'
+import { MAX_LEVEL, passFor, familyNames, familyLabel, stageLabel } from '../lib/levels.js'
 import { esc, $ } from '../app.js'
 
 const DAY = 864e5
@@ -38,7 +38,7 @@ export async function render(el) {
     const last = mine.reduce((m, a) => Math.max(m, Date.parse(a.created_at)), 0)
     return { ...s, n: mine.length, avg: mine.length ? avg(mine.map(a => a.score)) : null, last }
   })
-  const top = stats.filter(s => s.n).sort((a, b) => progress(b) - progress(a) || b.avg - a.avg).slice(0, 5)
+  const top = stats.filter(s => s.n && s.avg >= PASS_SCORE).sort((a, b) => progress(b) - progress(a) || b.avg - a.avg).slice(0, 5)
   const help = stats.filter(s => s.level < MAX_LEVEL && (s.avg === null || s.avg < PASS_SCORE || s.last < Date.now() - 14 * DAY))
     .sort((a, b) => (a.avg ?? -1) - (b.avg ?? -1)).slice(0, 5)
   // one bar per word family that has students (32 families would be too many bars), plus "All levels done"
@@ -49,7 +49,10 @@ export async function render(el) {
   const maxLevelCount = Math.max(1, ...perLevel.map(([, n]) => n))
 
   const tile = (label, value, note = '') => `<div class="tile"><span class="muted">${label}</span><b>${value}</b>${note ? `<span class="muted small">${note}</span>` : ''}</div>`
-  const who = s => `<a href="#/students/${s.id}">${esc(s.name)}</a><span class="muted small"> · ${esc(className[s.section_id] ?? '')}</span>`
+  // name over class, level over stage: two short lines instead of one long line that wraps mid-phrase
+  const who = s => `<a href="#/students/${s.id}">${esc(s.name)}</a><br><span class="muted small nowrap">${esc(className[s.section_id] ?? '')}</span>`
+  const keep = t => t.split(' · ').map(p => `<span class="nw">${esc(p)}</span>`).join(' · ') // wrap only between parts, never inside "CVC -at"
+  const lvl = s => s.level >= MAX_LEVEL ? '<b>All levels done</b>' : `<b>${keep(familyLabel(s.family_no, fams))}</b><br><span class="muted">${keep(stageLabel(s.level))}</span>`
 
   el.innerHTML = `<h1>${hello}</h1>
     <p class="muted" style="margin-top:-8px">${sections.length ? "Welcome back. Here is how your classes are doing." : 'Welcome to Basa. Start by adding your class in <b>Setup</b>.'}</p>
@@ -69,12 +72,12 @@ export async function render(el) {
     <div class="cols">
       <section><h2>Needs help</h2><p class="muted small">Below the pass mark, or no reading in 14 days.</p>
         ${help.length ? `<table><thead><tr><th>Student</th><th>Level</th><th>Avg</th></tr></thead><tbody>
-          ${help.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${esc(studentLabel(s, fams))}</td><td>${s.avg === null ? '<span class="muted">no reading</span>' : pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
+          ${help.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${lvl(s)}</td><td>${s.avg === null ? '<span class="muted">no reading</span>' : pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
           : '<p class="muted">Everyone is on track.</p>'}</section>
-      <section><h2>Top students</h2><p class="muted small">Highest level, then best average score (last 30 days).</p>
+      <section><h2>Top students</h2><p class="muted small">At or above the pass mark: highest level first (last 30 days).</p>
         ${top.length ? `<table><thead><tr><th>Student</th><th>Level</th><th>Avg</th></tr></thead><tbody>
-          ${top.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${esc(studentLabel(s, fams))}</td><td>${pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
-          : '<p class="muted">No readings yet.</p>'}</section>
+          ${top.map(s => `<tr data-href="#/students/${s.id}"><td>${who(s)}</td><td>${lvl(s)}</td><td>${pct(s.avg)}</td></tr>`).join('')}</tbody></table>`
+          : '<p class="muted">No one at the pass mark yet.</p>'}</section>
     </div>
 
     <h2>Students per level</h2>

@@ -88,7 +88,7 @@ export function trend(attempts, PASS_SCORE) {
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score for each reading, oldest to newest">
       ${grid}
       <line x1="${L}" x2="${W - R}" y1="${y(PASS_SCORE)}" y2="${y(PASS_SCORE)}" class="pass"/>
-      <text x="${L + 6}" y="${y(PASS_SCORE) - 6}" class="pass-label">pass ${pct(PASS_SCORE)}</text>
+      <text x="${W - R}" y="${y(PASS_SCORE) - 8}" text-anchor="end" class="pass-label">pass ${pct(PASS_SCORE)}</text>
       <polyline points="${pts.map(p => p.join(',')).join(' ')}" class="line"/>
       ${attempts.map((a, i) => `<g class="pt" tabindex="0" data-x="${(pts[i][0] / W) * 100}" data-y="${(pts[i][1] / H) * 100}"
           data-tip="${day(a.created_at)} · ${esc(a.lessons?.title ?? '')} · ${pct(a.score)} ${a.passed ? '✓' : '✗'}">

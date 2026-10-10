@@ -114,7 +114,7 @@
   .lvl { margin-top:20px } .lvl h2 { margin:0 0 4px; font-size:22px }
   @media (max-width:640px) { .stepper { flex-wrap:nowrap; gap:2px } .stepper li { min-width:0; font-size:12px } .stepper .dot { width:30px; height:30px } }
   .now-on { padding:12px 16px; background:var(--hover); border:2px solid var(--primary); border-radius:var(--radius) } .now-on b { font-size:20px }
-  td { vertical-align:middle } .nowrap { white-space:nowrap } tr[data-href] { cursor:pointer }
+  td { vertical-align:middle } .nowrap, .nw { white-space:nowrap } tr[data-href] { cursor:pointer }
   /* Words / Phrases / Sentences: one item per line */
   .big.stack { text-align:left } .big.stack .item.txt { display:block; margin:4px 0; padding:2px 6px !important; font:inherit; color:inherit; text-align:left }
   /* lesson words use the reading font everywhere: typing them, picture labels, missed words, what was heard */
@@ -128,6 +128,9 @@
   /* row numbers 1. 2. 3. in front of each student name */
   #list { counter-reset:row } tbody#list > tr, table#list > tbody > tr { counter-increment:row }
   #list td.name::before { content:counter(row) "."; display:inline-block; min-width:2ch; margin-right:6px; color:var(--muted); font-weight:800 }
+  @media (max-width:640px) { /* phones: tighter cells and let long labels wrap, so tables never push the page sideways */
+    td, th { padding:10px 6px } .nowrap { white-space:normal }
+  }
   #list td.act { text-align:right; white-space:nowrap } #list td.name { font-weight:700 }
   /* phones: each student becomes a small labelled card instead of a too-wide table row */
   @media (max-width:640px) {
@@ -163,7 +166,7 @@
   .auth form, .auth #extra { display:grid; gap:8px; text-align:left } .auth form label:not(:first-child) { margin-top:8px }
   .auth button { width:100% } .auth #msg { margin:0; font-weight:700; font-size:15px } .auth #msg:empty { display:none } .auth #msg.ok { color:var(--ok) } .auth #msg.bad { color:var(--bad); text-decoration:none }
   [aria-invalid="true"] { border-color:var(--bad) }
-  .small { font-size:14px; margin:4px 0 0 }
+  .small { font-size:15px; margin:4px 0 0 }
   .switch { margin:4px 0 0; font-size:15px }
   .auth button.linkish, button.linkish { width:auto; min-height:44px; padding:0 4px; border:0; background:none; box-shadow:none; color:var(--primary); text-decoration:underline; text-underline-offset:4px }
   button.linkish:hover:not(:disabled) { background:none; filter:brightness(1.15) } button.linkish:active:not(:disabled) { transform:none }
