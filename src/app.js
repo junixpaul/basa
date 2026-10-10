@@ -1,5 +1,7 @@
 import { supabase } from './lib/supabase.js'
 import { startOffline, flush, pending } from './lib/offline.js'
+import { autoTour } from './lib/guide.js'
+import { GRADES } from './lib/levels.js'
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 export const $ = (sel, el = document) => el.querySelector(sel)
@@ -21,6 +23,8 @@ const routes = [
   [/^#\/students$/, () => import('./pages/students.js')],
   [/^#\/students\/([\w-]+)$/, () => import('./pages/progress.js')],
   [/^#\/dashboard$/, () => import('./pages/dashboard.js')],
+  [/^#\/profile$/, () => import('./pages/profile.js')],
+  [/^#\/guide$/, () => import('./pages/guide.js')],
   [/^#\/lessons$/, () => import('./pages/lessons.js')],
   [/^#\/lessons\/([\w-]+)$/, () => import('./pages/lessons.js')],
   [/^#\/play\/([\w-]+)$/, () => import('./pages/player.js')],
@@ -34,6 +38,14 @@ async function login(el) {
       <h1>Welcome, teacher</h1>
       <p class="muted" id="sub">Sign in to manage your classes and lessons.</p>
       <form novalidate>
+        <div id="extra" hidden>
+          <label for="fname">Your name</label>
+          <input id="fname" autocomplete="name" placeholder="e.g. Maria Santos">
+          <label for="handling">Classes you handle</label>
+          <input id="handling" placeholder="e.g. Sampaguita, Rosal">
+          <label for="advisory">Advisory level</label>
+          <select id="advisory"><option value="">Choose…</option>${[...GRADES, 'No advisory class'].map(g => `<option>${g}</option>`).join('')}</select>
+        </div>
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu.ph" aria-describedby="msg">
         <label for="pw">Password</label>
@@ -68,6 +80,7 @@ async function login(el) {
     $('form .primary', el).textContent = signup ? 'Create account' : 'Log in'
     $('#sub', el).textContent = signup ? 'Free for teachers. Set up your classes in minutes.' : 'Sign in to manage your classes and lessons.'
     $('#link', el).hidden = signup
+    $('#extra', el).hidden = !signup
     pw.autocomplete = signup ? 'new-password' : 'current-password'
     pw.placeholder = signup ? 'At least 8 characters' : ''
     $('#ask', el).textContent = signup ? 'Already have an account?' : 'New to Basa?'
@@ -91,14 +104,21 @@ async function login(el) {
   $('form', el).onsubmit = async e => {
     e.preventDefault()
     if (!signup && lock.get().until > Date.now()) return countdown()
+    if (signup) {
+      if (!$('#fname', el).value.trim()) return bad($('#fname', el), 'Enter your name.')
+      if (!$('#handling', el).value.trim()) return bad($('#handling', el), 'Enter the classes you handle.')
+      if (!$('#advisory', el).value) return bad($('#advisory', el), 'Choose your advisory level.')
+    }
     if (!emailOk()) return
     if (!pw.value) return bad(pw, 'Enter your password.')
     if (signup) {
       if (pw.value.length < 8) return bad(pw, 'Use at least 8 characters.')
       const done = busy($('form .primary', el), 'Creating account…')
-      const { data, error } = await supabase.auth.signUp({ email: email.value, password: pw.value, options: { emailRedirectTo: location.origin + location.pathname } })
+      const { data, error } = await supabase.auth.signUp({ email: email.value, password: pw.value, options: { emailRedirectTo: location.origin + location.pathname,
+        data: { name: $('#fname', el).value.trim(), handling: $('#handling', el).value.trim(), advisory: $('#advisory', el).value } } })
       done()
       if (error) return /registered/i.test(error.message) ? bad(email, 'This email already has an account. Log in instead.') : say(error.message, 'bad', $('form .primary', el))
+      // with email confirmation on there is no session yet; onAuthStateChange routes in when there is
       // with email confirmation on there is no session yet; onAuthStateChange routes in when there is
       if (!data.session) say(`Almost done! Check ${email.value} to confirm your account.`, 'ok', $('form .primary', el))
       return
@@ -124,19 +144,21 @@ async function login(el) {
 
 let seq = 0
 async function route() {
-  const el = $('#app'), hash = location.hash || '#/', mine = ++seq
+  const el = $('#app'), hash = location.hash || '#/dashboard', mine = ++seq
   const { data } = await supabase.auth.getSession()
   if (mine !== seq) return
   // offline, an expired token can't refresh, so getSession returns none; the saved login still counts
   const session = data.session || (!navigator.onLine && hasSavedLogin())
-  $('#out').hidden = !session
+  const u = data.session?.user
+  $('#me span').textContent = u?.user_metadata?.name?.split(/\s+/)[0] || u?.email?.split('@')[0] || 'Profile' // name, else email; "Profile" only offline with no session
+  hash === '#/profile' ? $('#me').setAttribute('aria-current', 'page') : $('#me').removeAttribute('aria-current')
   // just signed in: swap the login card for the splash until the first page is ready
   if (session && document.body.classList.contains('signed-out')) el.replaceChildren($('#splash').content.cloneNode(true))
   document.body.classList.toggle('signed-out', !session)
   if (!session) return login(el)
   // highlight the menu item for this page; reading pages belong to their section
   const page = { assess: '#/', play: '#/lessons', students: '#/students', archive: '#/setup' }[hash.split('/')[1]] || hash.match(/^#\/\w*/)[0]
-  document.querySelectorAll('header nav a').forEach(a =>
+  document.querySelectorAll('header nav a, .tools a').forEach(a =>
     a.getAttribute('href') === page ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'))
   for (const [re, load] of routes) {
     const m = hash.match(re)
@@ -148,9 +170,9 @@ async function route() {
       if (navigator.onLine) throw err
       // offline and this page's data was never saved on the device
       box.innerHTML = `<h1>Not saved for offline yet</h1><p class="muted">Connect to the internet once, then tap
-        <b>Get ready for offline</b> on the Dashboard.</p><div class="row"><a href="#/dashboard"><button class="primary">Dashboard</button></a></div>`
+        <b>Get ready for offline</b> in your Profile.</p><div class="row"><a href="#/profile"><button class="primary">Profile</button></a></div>`
     }
-    if (mine === seq) el.replaceChildren(box)
+    if (mine === seq) { el.replaceChildren(box); autoTour() }
     return
   }
   el.innerHTML = '<h1>Page not found</h1><div class="row"><a href="#/"><button class="primary">Go to classes</button></a></div>'
@@ -161,7 +183,7 @@ function hasSavedLogin() {
 }
 
 // Sign out: upload saved readings first (they belong to this teacher), then wipe this teacher's offline data.
-$('#out').onclick = async () => {
+export async function askSignOut() {
   const dlg = $('#outDlg'), warn = $('#outWarn'), ok = $('#outOk')
   await flush()
   const n = pending()
@@ -192,3 +214,4 @@ document.addEventListener('click', e => {
 })
 supabase.auth.onAuthStateChange(() => setTimeout(() => { route(); flush() })) // setTimeout: awaiting supabase inside this callback can deadlock; flush: upload saved readings after sign-in
 addEventListener('hashchange', route)
+$('#fabMenu').onclick = e => e.target.closest('a') && e.currentTarget.hidePopover() // also when the link is the page you are already on

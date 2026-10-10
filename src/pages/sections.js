@@ -27,6 +27,12 @@ export async function render(el) {
     : { data: [] }
   const latest = {}
   for (const a of attempts ?? []) latest[`${a.student_id}:${a.lessons?.family_no ?? ''}:${a.lessons?.level}`] ??= a
+  // overall score = average of every reading a student has done (same definition as the student page)
+  const tally = {}
+  for (const a of attempts ?? []) { const t = tally[a.student_id] ??= { n: 0, sum: 0 }; t.n++; t.sum += a.score }
+  const overall = st => tally[st.id] ? tally[st.id].sum / tally[st.id].n : null
+  const pct = x => x === null ? '—' : `${Math.round(x * 100)}%`
+  const total = (attempts ?? []).length ? attempts.reduce((t, a) => t + a.score, 0) / attempts.length : null
   // a teacher's own lessons have no family, so they count for whichever family the student is in
   const scoreAt = (st, fam, lv) => latest[`${st.id}:${fam}:${lv}`] ?? latest[`${st.id}::${lv}`]
   const fams = familyNames(lessons)
@@ -54,6 +60,9 @@ export async function render(el) {
     <p id="msg" role="status" aria-live="polite"></p>
 
     ${students.length ? `
+    <div class="print-head"><b>Basa · ${esc(cls.name)}</b> · ${new Date().toLocaleDateString()}</div>
+    <p class="muted">Total students: <b>${students.length}</b> · Class overall score: <b>${pct(total)}</b> from ${attempts.length} reading${attempts.length === 1 ? '' : 's'}</p>
+    <div class="row"><button id="print">Print / Save as PDF</button><button id="csv">Download for Excel</button></div>
     <div class="row bulk" id="bulk" hidden>
       <b id="count">Tick the students to move</b>
       ${others.length ? `<select id="moveTo" aria-label="Move to class" disabled><option value="">Move to…</option>${others.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>` : ''}
@@ -61,7 +70,7 @@ export async function render(el) {
       <button id="delSel" disabled>Remove</button>    </div>
     <table id="list"><thead><tr>
       <th class="pick" style="width:40px"><input type="checkbox" id="all" aria-label="Select all students"></th>
-      <th>Student</th><th>Prev level</th><th>Level</th><th>Score</th><th></th></tr></thead><tbody>
+      <th>Student</th><th>Prev level</th><th>Level</th><th>Stage score</th><th>Overall</th><th class="act"></th></tr></thead><tbody>
     ${students.map(st => {
       const l = lessonFor(lessons, st), a = scoreAt(st, st.family_no, st.level)
       return `<tr data-stu="${st.id}" data-href="#/students/${st.id}">
@@ -69,7 +78,8 @@ export async function render(el) {
         <td class="name"><a href="#/students/${st.id}">${esc(st.name)}</a></td>
         <td data-label="Prev level"><span class="muted">${st.prev_level ? short(st.prev_family_no ?? st.family_no, st.prev_level) : '—'}</span> ${st.prev_level ? scoreTag(scoreAt(st, st.prev_family_no ?? st.family_no, st.prev_level)) : ''}</td>
         <td data-label="Level">${st.level >= MAX_LEVEL ? '<b>All levels done</b>' : `<b class="nowrap">${esc(familyLabel(st.family_no, fams))}</b><br><span class="muted nowrap">${stageLabel(st.level)}</span>`}</td>
-        <td data-label="Score">${scoreTag(a) || '<span class="muted">—</span>'}</td>
+        <td data-label="Stage score">${scoreTag(a) || '<span class="muted">—</span>'}</td>
+        <td data-label="Overall"><b>${pct(overall(st))}</b></td>
         <td class="act">${l ? `<a href="#/assess/${st.id}/${l.id}"><button class="primary">Read</button></a>`
           : `<span class="muted small nowrap">${st.level < MAX_LEVEL ? 'No lesson yet' : 'Finished'}</span>`}</td></tr>`
     }).join('')}
@@ -83,6 +93,20 @@ export async function render(el) {
     await render(el) // redraw replaces #msg, so report success on the new one
     if (done) Object.assign($('#msg', el), { textContent: done, className: 'ok' })
   }
+
+  // ponytail: CSV opens in Excel; a real .xlsx needs a library. PDF = the browser's print dialog ("Save as PDF").
+  $('#print', el)?.addEventListener('click', () => print())
+  $('#csv', el)?.addEventListener('click', () => {
+    const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [['Student', 'Class', 'Level', 'Stage', 'Stage score', 'Overall score', 'Readings']].concat(students.map(st => {
+      const a = scoreAt(st, st.family_no, st.level), done = st.level >= MAX_LEVEL
+      return [st.name, cls.name, done ? 'All levels done' : familyLabel(st.family_no, fams), done ? '' : stageLabel(st.level),
+        a ? pct(a.score) : '', pct(overall(st)).replace('—', ''), tally[st.id]?.n ?? 0]
+    })).concat([['Class overall', '', '', '', '', pct(total).replace('—', ''), attempts.length]])
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }))
+    Object.assign(document.createElement('a'), { href: url, download: `${cls.name}.csv` }).click()
+    URL.revokeObjectURL(url)
+  })
 
   $('#cls', el).onchange = e => { remember(e.target.value); render(el) }
 

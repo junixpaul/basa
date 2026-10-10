@@ -27,20 +27,25 @@
     --ok:#4ade80; --ok-bg:#0f2e1d; --bad:#f87171; --bad-bg:#3a1414; --note:#2a1d05; --note-line:#92400e; --note-fg:#fde68a;
     --clay:0 6px 0 #070c1a, 0 12px 28px rgb(0 0 0/.35);
   }
-  #theme { min-height:44px; width:44px; padding:0; display:grid; place-items:center; border-radius:999px }
-  #theme svg { width:20px; height:20px } :root[data-theme="dark"] #theme .moon, :root:not([data-theme="dark"]) #theme .sun { display:none }
   * { box-sizing: border-box } html { scroll-padding-top:88px }
   [hidden] { display:none !important } /* .row etc. set display, which would otherwise override the hidden attribute */
   body { margin:0; min-height:100vh; color:var(--fg); font:17px/1.6 Nunito, ui-rounded, system-ui, sans-serif; -webkit-font-smoothing:antialiased;
     background:radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--sun) 18%, transparent), transparent 30%),
                radial-gradient(circle at 100% 30%, color-mix(in srgb, var(--pink) 12%, transparent), transparent 30%), var(--bg) }
-  header { position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center; padding:10px max(16px, calc((100% - 880px)/2)); background:color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter:blur(12px); border-bottom:2px solid var(--line); flex-wrap:wrap }
+  header { position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center; padding:10px max(16px, calc((100% - 1040px)/2)); background:color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter:blur(12px); border-bottom:2px solid var(--line); flex-wrap:wrap }
   .brand { display:flex; align-items:center; gap:10px; margin-right:auto; font:800 24px/1 "Baloo 2", Nunito, sans-serif; color:var(--fg); text-decoration:none }
   .brand svg { width:36px; height:36px; flex:none }
-  header nav a { text-decoration:none; color:var(--muted); font-weight:700; padding:8px 14px; border-radius:999px; transition:background .2s, color .2s }
+  /* header: logo left, sign out + theme right, then the menu as one full-width row of equal big buttons (3 per row on phones) */
+  .tools { display:flex; gap:8px; align-items:center }
+  header nav { flex:1 0 100%; display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:6px }
+  @media (min-width:1000px) { /* wide screens: logo | menu | sign out on one line, same width as the page card */
+    .brand { margin-right:0 } header nav { flex:0 1 auto; margin:0 auto; order:1; grid-template-columns:repeat(5, auto) } .tools { order:2 }
+    header { padding-block:12px } header nav a { padding:10px 16px }
+  }
+  header nav a { text-decoration:none; color:var(--muted); font-weight:800; font-size:18px; text-align:center; padding:11px 8px; border-radius:14px; transition:background .2s, color .2s }
   header nav a[aria-current="page"], header nav a[aria-current="page"]:hover { background:var(--primary); color:var(--primary-fg) }
-  header nav a:hover { background:var(--card); color:var(--primary) }
-  main { width:calc(100% - 32px); max-width:880px; margin:32px auto; padding:32px; background:var(--card); border:2px solid var(--line); border-radius:28px; box-shadow:var(--clay) }
+  header nav a:hover { background:color-mix(in srgb, var(--primary) 16%, var(--card)); color:var(--fg) }
+  main { width:calc(100% - 32px); max-width:1040px; margin:32px auto; padding:32px; background:var(--card); border:2px solid var(--line); border-radius:28px; box-shadow:var(--clay) }
   @media (max-width:640px) { main { width:100%; margin:0; padding:20px 16px; border:0; border-radius:0; box-shadow:none } }
   h1, h2, h3 { font-family:"Baloo 2", Nunito, sans-serif; font-weight:800; line-height:1.15; letter-spacing:-.01em }
   h1 { font-size:clamp(28px, 5vw, 40px); margin:0 0 16px }
@@ -49,15 +54,16 @@
   input:focus, select:focus, textarea:focus, button:focus-visible, .item:focus-visible { outline:none; border-color:var(--ring); box-shadow:0 0 0 4px color-mix(in srgb, var(--ring) 30%, transparent) }
   ::placeholder { color:var(--muted); opacity:.8 } :focus::placeholder { color:transparent }
   button { cursor:pointer; font-weight:800; box-shadow:0 4px 0 var(--field) }
-  button:hover:not(:disabled) { background:var(--hover) }
+  button:hover:not(:disabled) { background:color-mix(in srgb, var(--primary) 16%, var(--card)); border-color:var(--primary) }
+  a:where(:not(.brand):not(:has(button))):hover { background:color-mix(in srgb, var(--primary) 16%, transparent); border-radius:6px; text-decoration-thickness:3px }
   button:active:not(:disabled) { transform:translateY(4px); box-shadow:0 0 0 var(--field) }
   button.primary { background:var(--primary); color:var(--primary-fg); border-color:var(--primary-dk); box-shadow:0 4px 0 var(--primary-dk) }
-  button.primary:hover:not(:disabled) { background:var(--primary); filter:brightness(1.08) }
+  button.primary:hover:not(:disabled) { background:var(--sun); border-color:var(--sun); color:#0f172a; box-shadow:0 4px 0 color-mix(in srgb, var(--sun) 65%, #000) } /* yellow: unmistakable which button is under the pointer */
   button.primary:active:not(:disabled) { box-shadow:0 0 0 var(--primary-dk) }
   button:disabled { opacity:.5; cursor:default }
   label { font-weight:700 }
   table { width:100%; border-collapse:separate; border-spacing:0 } th { color:var(--muted); font-weight:800; font-size:14px; text-transform:uppercase; letter-spacing:.04em }
-  td, th { padding:12px 10px; border-bottom:2px solid var(--line); text-align:left } tbody tr:hover td { background:var(--hover) }
+  td, th { padding:12px 10px; border-bottom:2px solid var(--line); text-align:left } tbody tr:hover td { background:color-mix(in srgb, var(--primary) 12%, var(--card)) }
   .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin:16px 0 }
   .muted { color:var(--muted) } .note { background:var(--note); color:var(--note-fg); border:2px solid var(--note-line); padding:12px 16px; border-radius:var(--radius); font-weight:600 }
   /* kid-facing reading text */
@@ -77,7 +83,7 @@
   .bars { display:grid; gap:8px } .bar-row { display:grid; grid-template-columns:minmax(120px, 170px) 1fr 40px; gap:12px; align-items:center }
   .bar-track { height:14px; background:var(--hover); border-radius:999px; overflow:hidden } .bar { display:block; height:100%; min-width:4px; background:var(--primary); border-radius:999px }
   .bar-row b { text-align:right }
-  .cols { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:24px } .cols h2 { margin-bottom:0 }
+  .cols { margin-top:28px; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:24px } .cols h2 { margin-bottom:0 }
   .stepper { display:flex; gap:4px; list-style:none; padding:0; margin:16px 0; flex-wrap:wrap }
   .stepper li { flex:1; min-width:90px; display:grid; justify-items:center; gap:6px; font-weight:700; font-size:14px; color:var(--muted); text-align:center }
   .stepper .dot { width:36px; height:36px; display:grid; place-items:center; border-radius:50%; border:2px solid var(--field); background:var(--card) }
@@ -116,9 +122,12 @@
   textarea[name=items], input[aria-label="Picture label"] { font-weight:400 } textarea[name=items] { font-size:20px; line-height:1.6 } td details summary { font-family:Nunito, sans-serif }
   .row.head { margin:0 0 8px } .row.head h1 { margin:0 }
   @media (max-width:640px) { /* phones: compact header that scrolls away instead of covering a quarter of the screen */
-    header { position:static; gap:8px } header nav { width:100%; gap:4px; margin:0 }
-    header nav a { padding:6px 10px; font-size:15px } .brand { font-size:22px } .brand svg { width:32px; height:32px }
+    header { position:static; gap:8px }
+    header nav a { padding:10px 4px; font-size:17px } .brand { font-size:22px } .brand svg { width:32px; height:32px }
   }
+  /* row numbers 1. 2. 3. in front of each student name */
+  #list { counter-reset:row } tbody#list > tr, table#list > tbody > tr { counter-increment:row }
+  #list td.name::before { content:counter(row) "."; display:inline-block; min-width:2ch; margin-right:6px; color:var(--muted); font-weight:800 }
   #list td.act { text-align:right; white-space:nowrap } #list td.name { font-weight:700 }
   /* phones: each student becomes a small labelled card instead of a too-wide table row */
   @media (max-width:640px) {
@@ -146,12 +155,12 @@
   .auth .pw button { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:44px; min-height:40px; padding:0; display:grid; place-items:center; border:0; background:none; box-shadow:none; color:var(--muted) }
   .pw button:hover:not(:disabled) { background:none; color:var(--fg) } .auth .pw button:active:not(:disabled) { transform:translateY(-50%) } .pw svg { width:22px; height:22px }
   .pw button[aria-pressed="false"] .slash { display:none }
-  body.signed-out header { position:static } body.signed-out header nav a { display:none }
+  body.signed-out header { position:static } body.signed-out header nav { display:none }
   body.signed-out main { background:none; border:0; box-shadow:none; padding:0 }
   .auth { max-width:440px; margin:40px auto; padding:36px 32px; background:var(--card); border:2px solid var(--line); border-radius:28px; box-shadow:var(--clay); display:grid; gap:12px; text-align:center }
   .auth h1 { margin:8px 0 0 } .auth > .muted { margin:0 0 8px }
   .auth-logo { width:64px; height:64px; margin:0 auto }
-  .auth form { display:grid; gap:8px; text-align:left } .auth form label:not(:first-child) { margin-top:8px }
+  .auth form, .auth #extra { display:grid; gap:8px; text-align:left } .auth form label:not(:first-child) { margin-top:8px }
   .auth button { width:100% } .auth #msg { margin:0; font-weight:700; font-size:15px } .auth #msg:empty { display:none } .auth #msg.ok { color:var(--ok) } .auth #msg.bad { color:var(--bad); text-decoration:none }
   [aria-invalid="true"] { border-color:var(--bad) }
   .small { font-size:14px; margin:4px 0 0 }
@@ -159,12 +168,47 @@
   .auth button.linkish, button.linkish { width:auto; min-height:44px; padding:0 4px; border:0; background:none; box-shadow:none; color:var(--primary); text-decoration:underline; text-underline-offset:4px }
   button.linkish:hover:not(:disabled) { background:none; filter:brightness(1.15) } button.linkish:active:not(:disabled) { transform:none }
   @media (max-width:640px) { .auth { margin:24px auto; padding:28px 20px; border-radius:24px } }
+  .shot { display:block; width:100%; height:auto; margin:10px 0 18px; border:2px solid var(--line); border-radius:var(--radius); box-shadow:var(--clay) }
+  /* setup tabs */
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 }
+  .tabs [aria-selected="true"], .tabs [aria-selected="true"]:hover:not(:disabled) { background:var(--primary); border-color:var(--primary-dk); color:var(--primary-fg); box-shadow:0 4px 0 var(--primary-dk) }
+  .steps li { padding:8px 0 }
+  details { padding:6px 0 }
+  /* floating menu button: always in reach, opens the same pages as the top menu */
+  #fab { position:fixed; right:16px; bottom:16px; z-index:15; display:flex; align-items:center; gap:8px; width:60px; height:60px; padding:0; justify-content:center; border-radius:50%; box-shadow:var(--clay) }
+  #fab svg { width:28px; height:28px } body { padding-bottom:80px } body.signed-out #fab { display:none }
+  #fabMenu { position:fixed; inset:auto 16px 88px auto; margin:0; width:min(280px, calc(100% - 32px)); max-height:calc(100dvh - 110px); overflow:auto; padding:8px; border:2px solid var(--line); border-radius:20px; background:var(--card); color:var(--fg); box-shadow:var(--clay) }
+  #fabMenu:popover-open { display:grid; gap:4px; animation:pop .15s ease-out; transform-origin:bottom right }
+  #fabMenu b { padding:8px 16px 2px; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) } #fabMenu a.qa { color:var(--primary) }
+  #fabMenu a { display:block; padding:12px 16px; border-radius:12px; text-decoration:none; font-size:18px; font-weight:800; color:var(--fg) }
+  #fabMenu a:hover { background:color-mix(in srgb, var(--primary) 16%, var(--card)) } #fabMenu a[aria-current] { background:var(--primary); color:var(--primary-fg) }
+  .print-head { display:none }
+  @media print { /* Print / Save as PDF: just the student table, no menus or buttons */
+    header, .row, .bulk, .addbox, button, #msg, dialog, #tour, #fabMenu, .act, .pick { display:none !important }
+    body { background:#fff } main { width:100%; max-width:none; margin:0; padding:0; border:0; box-shadow:none }
+    .print-head { display:block; margin:0 0 12px; font-size:18px } h1 { display:none } #list tr { break-inside:avoid }
+    #list td { border-bottom:1px solid #999 } .muted { color:#333 } #list a { color:#000; text-decoration:none }
+  }
+  /* profile */
+  .tools a { display:flex; align-items:center; gap:8px; padding:9px 16px; font-weight:800; text-decoration:none; color:var(--fg); background:var(--card); border:2px solid var(--field); border-radius:999px; box-shadow:0 4px 0 var(--field) }
+  .tools a:hover { border-color:var(--primary) } .tools a[aria-current] { background:var(--primary); border-color:var(--primary-dk); color:var(--primary-fg) }
+  .tools svg { width:22px; height:22px } #guide { padding:9px } .tools a span { max-width:min(26ch, 40vw); overflow:hidden; text-overflow:ellipsis; white-space:nowrap } body.signed-out .tools { display:none }
+  .who { display:flex; gap:16px; align-items:center; flex-wrap:wrap }
+  .avatar { width:84px; height:84px; border-radius:50%; object-fit:cover; display:grid; place-items:center; background:var(--primary); color:var(--primary-fg); font:800 36px/1 "Baloo 2", Nunito, sans-serif; border:3px solid var(--card); box-shadow:var(--clay) }
+  .cols p { text-wrap:balance }
+  .prof { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px 24px } .prof .who, .prof .wide { grid-column:1 / -1 } .prof label { display:block; margin-bottom:6px } .prof input, .prof select { width:100% } .prof .row { margin:0 }
+  /* walkthrough card */
+  #tour { position:fixed; z-index:20; transition:top .25s ease-out, left .25s ease-out; width:min(420px, calc(100% - 32px)); padding:20px 24px; background:var(--card); border:2px solid var(--primary); border-radius:24px; box-shadow:var(--clay); animation:pop .2s ease-out }
+  #tour h2 { margin:0 0 4px } #tour p { margin:0 0 8px } #tour .row { margin:8px 0 0 }
+  .tour-hit { outline:4px solid var(--sun); outline-offset:3px; border-radius:12px }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important } .item:hover { transform:none } }
 </style>
 </head>
 <body>
-<header><a class="brand" href="#/" aria-label="Basa home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--primary)"/><circle cx="11" cy="8.6" r="3.4" fill="var(--sun)"/><path d="M5.2 19.5a5.8 5.8 0 0 1 11.6 0z" fill="var(--sun)"/><circle cx="21.8" cy="12" r="2.6" fill="var(--pink)"/><path d="M17.6 19.5a4.2 4.2 0 0 1 8.4 0z" fill="var(--pink)"/><path d="M15.4 20.6C12.6 18.6 8.6 18.3 4.5 19.4v7.2c4.1-1.1 8.1-.8 10.9 1.2zM16.6 20.6c2.8-2 6.8-2.3 10.9-1.2v7.2c-4.1-1.1-8.1-.8-10.9 1.2z" fill="#fff"/></svg>Basa</a><span id="offline" class="pill-offline" role="status" hidden></span><nav class="row"><a href="#/dashboard">Dashboard</a><a href="#/">Classes</a><a href="#/students">Students</a><a href="#/lessons">Lessons</a><a href="#/setup">Setup</a><button id="out" hidden>Sign out</button><button id="theme" type="button" aria-label="Switch light or dark mode" title="Light / dark"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></nav></header>
+<header><a class="brand" href="#/dashboard" aria-label="Basa home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--primary)"/><circle cx="11" cy="8.6" r="3.4" fill="var(--sun)"/><path d="M5.2 19.5a5.8 5.8 0 0 1 11.6 0z" fill="var(--sun)"/><circle cx="21.8" cy="12" r="2.6" fill="var(--pink)"/><path d="M17.6 19.5a4.2 4.2 0 0 1 8.4 0z" fill="var(--pink)"/><path d="M15.4 20.6C12.6 18.6 8.6 18.3 4.5 19.4v7.2c4.1-1.1 8.1-.8 10.9 1.2zM16.6 20.6c2.8-2 6.8-2.3 10.9-1.2v7.2c-4.1-1.1-8.1-.8-10.9 1.2z" fill="#fff"/></svg>Basa</a><span id="offline" class="pill-offline" role="status" hidden></span><span class="tools"><a id="guide" href="#/guide" aria-label="Guide: how to use Basa" title="Guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg></a><a id="me" href="#/profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Profile</span></a></span><nav aria-label="Main menu"><a href="#/dashboard">Dashboard</a><a href="#/">Classes</a><a href="#/students">Students</a><a href="#/lessons">Lessons</a><a href="#/setup">Setup</a></nav></header>
 <main id="app"><div class="splash" role="status"><img src="logo.svg" alt=""><b>Basa</b><span class="spinner" aria-hidden="true"></span><span class="muted">Getting your classes ready…</span></div></main>
+<button id="fab" class="primary" popovertarget="fabMenu" aria-label="Quick actions" title="Quick actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 2 4 14h6.5L9.5 22 20 9.5h-6.8z"/></svg></button>
+<nav id="fabMenu" popover aria-label="Quick menu"><b>Quick actions</b><a class="qa" href="#/students">Let a student read</a><a class="qa" href="#/">Add students</a><a class="qa" href="#/lessons/new">New lesson</a><a class="qa" href="#/setup">Add a class</a></nav>
 <dialog id="outDlg" aria-labelledby="outTitle" aria-describedby="outBody">
   <form method="dialog">
     <h2 id="outTitle">Sign out of Basa?</h2>
@@ -187,13 +231,6 @@
   </form>
 </dialog>
 <template id="splash"><div class="splash" role="status"><img src="logo.svg" alt=""><b>Basa</b><span class="spinner" aria-hidden="true"></span><span class="muted">Getting your classes ready…</span></div></template>
-<script>
-  document.getElementById('theme').onclick = () => {
-    const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = t
-    try { localStorage.setItem('theme', t) } catch {}
-  }
-</script>
 <script type="module" src="src/app.js"></script>
 </body>
 </html>

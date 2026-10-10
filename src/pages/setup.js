@@ -1,14 +1,24 @@
 import { supabase } from '../lib/supabase.js'
+import { GRADES, LEVELS } from '../lib/levels.js'
+import { getPassing, savePassing } from '../lib/passing.js'
 import { esc, $, ask } from '../app.js'
 
-const GRADES = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']
+const pctVal = x => x == null ? '' : Math.round(x * 100)
 
 // Grade level + section setup. Required and unique are enforced by the DB (migration 0002).
 export async function render(el) {
-  const { data: sections, error } = await supabase.from('sections').select('id, grade, section').is('archived_at', null).order('section')
+  const [{ data: sections, error }, passing] = await Promise.all([
+    supabase.from('sections').select('id, grade, section').is('archived_at', null).order('section'),
+    getPassing(),
+  ])
   if (error) { el.innerHTML = `<p class="bad">${esc(error.message)}</p>`; return }
 
   el.innerHTML = `<div class="row head"><h1>Setup</h1><a href="#/archive" style="margin-left:auto"><button>Archive</button></a></div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="t-sec" aria-controls="tab-sec" aria-selected="true">Level &amp; Section</button>
+      <button type="button" role="tab" id="t-pass" aria-controls="tab-pass" aria-selected="false">Passing Average</button>
+    </div>
+    <div id="tab-sec" role="tabpanel" aria-labelledby="t-sec">
     <p class="muted">Add each grade level and section you teach. Every section becomes a class.</p>
     <form id="add" class="row" novalidate>
       <select name="grade" required aria-label="Grade level"><option value="">Grade level</option>${GRADES.map(g => `<option>${g}</option>`).join('')}</select>
@@ -21,8 +31,43 @@ export async function render(el) {
         <td>${esc(s.section)}</td>
         <td style="text-align:right"><button data-rename>Rename</button> <button data-del>Delete</button></td></tr>`).join('')}
       </tbody></table>`).join('') || '<p class="muted">No sections yet.</p>'}
-    ${sections.length ? '<div class="row" style="margin-top:24px"><a href="#/"><button class="primary">Next: add students →</button></a></div>' : ''}`
+    ${sections.length ? '<div class="row" style="margin-top:24px"><a href="#/"><button class="primary">Next: add students →</button></a></div>' : ''}
+    </div>
+    <div id="tab-pass" role="tabpanel" aria-labelledby="t-pass" hidden>
+    <p class="muted">The average a student needs to pass a reading. Leave a box empty to use the default (80%). A stage box beats the overall one.</p>
+    <form id="pass" class="prof" novalidate>
+      <div class="wide"><label for="p-overall">Overall average (%) <span class="muted">(used for every stage without its own)</span></label>
+        <input id="p-overall" type="number" min="1" max="100" inputmode="numeric" placeholder="80 (default)" value="${pctVal(passing.overall)}"></div>
+      <div class="wide"><b>Per stage</b> <span class="muted">(optional, e.g. Words 70%, Short Story 90%)</span></div>
+      ${Object.entries(LEVELS).map(([n, name]) => `<div><label for="p-s${n}">Stage ${n} · ${name} (%)</label>
+        <input id="p-s${n}" data-stage="${n}" type="number" min="1" max="100" inputmode="numeric" placeholder="default" value="${pctVal(passing.stage?.[n])}"></div>`).join('')}
+      <div class="row wide"><button class="primary">Save passing average</button><span id="pmsg" role="status"></span></div>
+    </form>
+    </div>`
 
+  for (const tab of el.querySelectorAll('[role=tab]')) tab.onclick = () => {
+    for (const t of el.querySelectorAll('[role=tab]')) {
+      t.setAttribute('aria-selected', t === tab)
+      $('#' + t.getAttribute('aria-controls'), el).hidden = t !== tab
+    }
+  }
+  const pmsg = $('#pmsg', el)
+  $('#pass', el).onsubmit = async e => {
+    e.preventDefault()
+    const say = (t, k = '') => { pmsg.textContent = t; pmsg.className = k }
+    const cfg = { stage: {} }
+    for (const input of e.target.querySelectorAll('input')) {
+      const raw = input.value.trim()
+      if (!raw) continue // empty = use the default
+      const v = Number(raw)
+      if (!(v >= 1 && v <= 100)) { input.focus(); return say('Use a number from 1 to 100, or leave it empty.', 'bad') }
+      if (input.id === 'p-overall') cfg.overall = v / 100
+      else cfg.stage[input.dataset.stage] = v / 100
+    }
+    say('Saving…')
+    const { error } = await savePassing(cfg)
+    error ? say(error.message, 'bad') : say('Saved.', 'ok')
+  }
   const msg = $('#msg', el)
   const fail = (text, input) => { msg.textContent = text; msg.className = 'bad'; if (input) { input.setAttribute('aria-invalid', 'true'); input.focus() } }
   const why = (e, grade, section) => e.code === '23505' ? `${grade} – ${section} already exists.` : e.message
