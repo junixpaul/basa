@@ -26,7 +26,8 @@ export function speak(text, lang) {
 
 // Resolves with everything heard until stop (signal abort), maxMs, PAUSE_MS of quiet after reading started,
 // or onText(textSoFar) returning true (e.g. the reader reached the last word).
-const PAUSE_MS = 8000 // calibration knob: raise if slow readers get cut off mid-lesson
+// calibration knob: quiet this long ends listening (the reading page then offers Continue)
+export const PAUSE_MS = 60000
 export function listen(lang, maxMs = 30000, signal, local = false, onText = () => false) {
   const R = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition
   if (!R) return Promise.reject(new Error('unsupported'))
