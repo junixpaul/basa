@@ -24,8 +24,9 @@ export function speak(text, lang) {
   return { fallback, ended: new Promise(r => { u.onend = u.onerror = r }) }
 }
 
-// Resolves with everything heard until stop (signal abort), silence end, maxMs,
+// Resolves with everything heard until stop (signal abort), maxMs, PAUSE_MS of quiet after reading started,
 // or onText(textSoFar) returning true (e.g. the reader reached the last word).
+const PAUSE_MS = 8000 // calibration knob: raise if slow readers get cut off mid-lesson
 export function listen(lang, maxMs = 30000, signal, local = false, onText = () => false) {
   const R = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition
   if (!R) return Promise.reject(new Error('unsupported'))
@@ -35,15 +36,26 @@ export function listen(lang, maxMs = 30000, signal, local = false, onText = () =
     if (local) r.processLocally = true
     r.continuous = true
     r.interimResults = true // live words for highlighting
-    let text = '', failed = false
-    r.onresult = e => { text = [...e.results].map(x => x[0].transcript).join(' '); if (onText(text)) r.stop() }
+    // Chrome ends a session by itself after a pause (slow readers) or with 'no-speech';
+    // restart until a real stop, keeping what earlier sessions heard.
+    let text = '', prev = '', failed = false, done = false, idle
+    const finish = () => { done = true; r.stop() }
+    r.onresult = e => {
+      text = (prev + ' ' + [...e.results].map(x => x[0].transcript).join(' ')).trim()
+      clearTimeout(idle); idle = setTimeout(finish, PAUSE_MS) // last word misheard → still ends
+      if (onText(text)) finish()
+    }
     r.onerror = e => {
+      if (e.error === 'no-speech' && !done) return // a pause, not a failure; onend restarts
       failed = true
       reject(new Error(['not-allowed', 'service-not-allowed'].includes(e.error) ? 'denied' : e.error))
     }
-    r.onend = () => { clearTimeout(timer); if (!failed) resolve(text.trim()) }
-    const timer = setTimeout(() => r.stop(), maxMs)
-    signal?.addEventListener('abort', () => r.stop())
+    r.onend = () => {
+      if (!done && !failed) { prev = text; try { return r.start() } catch {} }
+      clearTimeout(timer); clearTimeout(idle); if (!failed) resolve(text.trim())
+    }
+    const timer = setTimeout(finish, maxMs)
+    signal?.addEventListener('abort', finish)
     r.start()
   })
 }
