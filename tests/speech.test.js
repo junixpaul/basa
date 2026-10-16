@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { pickVoice, listen } from '../src/lib/speech.js'
+import { pickVoice, listen, PAUSE_MS } from '../src/lib/speech.js'
 const V = [{ lang: 'en-US', name: 'en' }, { lang: 'fil-PH', name: 'fil' }]
 test('exact match', () => assert.deepEqual(pickVoice(V, 'en-US'), { voice: V[0], fallback: false }))
 test('Bisaya falls back to Filipino', () => assert.deepEqual(pickVoice(V, 'ceb-PH'), { voice: V[1], fallback: true }))
@@ -28,9 +28,9 @@ test('listen ends after a long pause once reading started (last word misheard)',
     stop() { queueMicrotask(() => this.onend()) }
   }
   try {
-    const heard = listen('fil-PH', 60000)
+    const heard = listen('fil-PH', 180000)
     await Promise.resolve()
-    mock.timers.tick(8000)
+    mock.timers.tick(PAUSE_MS)
     assert.equal(await heard, 'ang')
   } finally { mock.timers.reset(); delete globalThis.SpeechRecognition }
 })

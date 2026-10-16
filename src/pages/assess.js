@@ -32,8 +32,8 @@ export async function render(el, [studentId, lessonId]) {
   el.innerHTML = `<div class="row" style="margin-top:0"><a href="#/"><button>← Back to classes</button></a></div>
     <p class="muted">${esc(student.name)} · ${esc(studentLabel(student, fams))}</p><h1>${esc(lesson.title)}</h1>
     <p class="big${stacked ? ' stack' : ''}" id="text">${stacked ? '' : esc(target)}</p>
-    <div class="row"><button class="primary" id="go">🎤 Start reading</button><button id="hear">🔊 Read the words</button><button id="stop" hidden>■ Stop</button><span id="msg" role="status"></span></div>`
-  const go = $('#go', el), stop = $('#stop', el), msg = $('#msg', el), hear = $('#hear', el)
+    <div class="row"><button class="primary" id="go">🎤 Start reading</button><button id="hear">🔊 Read the words</button><button id="stop" hidden>■ Stop</button><button id="finish" hidden>✓ Finish &amp; score</button><span id="msg" role="status"></span></div>`
+  const go = $('#go', el), stop = $('#stop', el), msg = $('#msg', el), hear = $('#hear', el), finish = $('#finish', el)
 
   // Text-to-speech model reading; tap again to stop. Never runs while the mic listens.
   let speaking = false
@@ -61,36 +61,51 @@ export async function render(el, [studentId, lessonId]) {
     return words.length > 0 && words.at(-1).ok
   }
 
+  // A long pause turns the mic off but keeps what was read; Continue adds to it, for a break of any length.
+  // ponytail: kept in the page only, leaving the page drops a paused reading.
+  let sofar = ''
+  finish.onclick = () => { finish.hidden = go.hidden = true; score(sofar) }
+
   go.onclick = async () => {
     const ctl = new AbortController()
     stop.onclick = () => ctl.abort()
     hush(); hear.disabled = true // the computer's voice must not be scored as the child's reading
-    go.hidden = true; stop.hidden = false; msg.textContent = 'Listening… read the words out loud.'
+    go.hidden = finish.hidden = true; stop.hidden = false; msg.textContent = 'Listening… read the words out loud.'
     let heard
-    const maxMs = lesson.level === 4 ? 180000 : 60000
+    const live2 = t => live(`${sofar} ${t}`)
+    const maxMs = lesson.level === 4 ? 300000 : 180000
     try {
       try {
         if (!navigator.onLine) throw new Error('network') // no signal: go straight to on-device listening
-        heard = await listen(lesson.language, maxMs, ctl.signal, false, live)
+        heard = await listen(lesson.language, maxMs, ctl.signal, false, live2)
       } catch (e) {
         // Google's speech service unreachable (no signal, VPN, firewall) → try Chrome's on-device recognition
         if (e.message !== 'network') throw e
         msg.textContent = 'Switching to offline listening…'
         if (await localSpeechReady(lesson.language)) {
           msg.textContent = 'Listening (offline)… read the words out loud.'
-          heard = await listen(lesson.language, maxMs, ctl.signal, true, live)
+          heard = await listen(lesson.language, maxMs, ctl.signal, true, live2)
         } else {
           // no Chrome on-device model for this language → record, then transcribe in the browser
           stop.hidden = false
-          heard = await recordAndTranscribe(lesson.language, maxMs, ctl.signal, t => { msg.textContent = t }, live)
+          heard = await recordAndTranscribe(lesson.language, maxMs, ctl.signal, t => { msg.textContent = t }, live2)
         }
       }
     } catch (e) {
       msg.textContent = ERRORS[e.message] ?? `Microphone problem: ${e.message}`
-      go.hidden = false; stop.hidden = true; return
+      go.hidden = false; finish.hidden = !sofar; stop.hidden = true; return
     } finally { stop.hidden = true; hear.disabled = false }
+    heard = `${sofar} ${heard ?? ''}`.trim()
     if (!heard) { msg.textContent = ERRORS['no-speech']; go.hidden = false; return }
+    // Stopped by a long pause or the time limit with words left: keep progress, mic off until Continue.
+    if (!ctl.signal.aborted && !scoreReading(target, heard).words.at(-1)?.ok) {
+      sofar = heard; go.textContent = '▶ Continue reading'; go.hidden = finish.hidden = false
+      msg.textContent = 'Paused. Tap Continue when ready, or Finish to score.'; return
+    }
+    score(heard)
+  }
 
+  const score = async heard => {
     const r = scoreReading(target, heard)
     const passed = r.score >= need
     $('#text', el).innerHTML = paint(r.words.map(w => ({ text: w.text, cls: w.ok ? 'ok' : 'bad' })))
