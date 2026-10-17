@@ -10,7 +10,6 @@ export const passScore = lang => PASS_SCORE_BY_LANG[lang] ?? PASS_SCORE
 // Teacher's passing averages (Setup): cfg = { overall?, stage?: {1-4: x} }, x in 0..1.
 // This stage's own average wins, then the overall average, then the app default.
 export const passFor = (cfg, stage, lang) => cfg?.stage?.[stage] ?? cfg?.overall ?? passScore(lang)
-export const levelLabel = n => (n >= MAX_LEVEL ? 'Finished' : `Level ${n} · ${LEVELS[n]}`)
 
 // CVC families: a student's level is a family (Level 1 = -at, Level 2 = -an, ...) and their step inside it
 // is Words → Phrases → Sentences → Short Story (students.level 1-4; 5 = every family done).

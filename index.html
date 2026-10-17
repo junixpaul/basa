@@ -153,6 +153,35 @@
   input[type=checkbox] { width:22px; height:22px; min-height:0; padding:0; border:0; box-shadow:none; accent-color:var(--primary); cursor:pointer }
   input[type=checkbox]:focus { box-shadow:none } input[type=checkbox]:focus-visible { outline:3px solid var(--ring); outline-offset:2px }
   button.danger, button.danger:hover:not(:disabled) { background:var(--bad); color:#fff; border-color:var(--bad); box-shadow:0 4px 0 color-mix(in srgb, var(--bad) 70%, #000) }
+  /* reading page: status + Start/Stop stay pinned to the bottom of the screen, so long word lists never push them out of view */
+  .controls { position:sticky; bottom:0; z-index:5; margin:0; padding:12px 0 max(12px, env(safe-area-inset-bottom)); background:var(--card); border-top:2px solid var(--line) }
+  .controls #msg { flex-basis:100%; font-weight:700 }
+  .controls .rec { display:inline-block; width:12px; height:12px; margin-right:10px; border-radius:50%; background:#fff; animation:rec 1.2s ease-in-out infinite }
+  @keyframes rec { 50% { opacity:.25 } }
+  /* reading game: the dashed box holds the hint, the big Start button, a progress meter, the words and the result */
+  .stage { position:relative; overflow:hidden; margin:20px 0; padding:20px 24px; background:var(--hover); border:2px dashed var(--field); border-radius:24px }
+  .stage .big { margin:12px 0 0; padding:0; background:none; border:0; border-radius:0 }
+  .stage-top { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; justify-content:space-between }
+  .hint { flex:1 1 260px; margin:0; font:700 22px/1.35 "Baloo 2", Nunito, sans-serif }
+  .hint b { padding:0 8px; border-radius:10px; background:var(--sun); color:#0f172a; font-family:Andika, Nunito, sans-serif } .hint b.tap { background:var(--primary); color:var(--primary-fg); font-family:inherit }
+  button.go { min-height:68px; padding:12px 36px; border-radius:999px; font:800 26px/1 "Baloo 2", Nunito, sans-serif; animation:breathe 2.4s ease-in-out infinite }
+  button.go:hover, button.go:active { animation:none }
+  .meter { height:16px; margin:16px 0 4px; background:var(--card); border:2px solid var(--line); border-radius:999px; overflow:hidden }
+  .meter span { display:block; width:0; height:100%; background:var(--ok); border-radius:999px; transition:width .4s ease-out }
+  .count { margin:0; font-weight:800; color:var(--muted) }
+  .w { position:relative; scroll-margin:24px 0 160px; transition:background .2s }
+  .w.next { background:var(--sun); color:#0f172a; box-shadow:0 4px 0 color-mix(in srgb, var(--sun) 65%, #000); animation:hop 1.1s ease-in-out infinite }
+  .w.say { background:var(--primary); color:var(--primary-fg); box-shadow:0 4px 0 var(--primary-dk); animation:none } /* the word "Read the words" is saying now */
+  .w.ok::after, .w.bad::after { display:inline-block; margin-left:4px; font:800 .45em/1 Nunito, sans-serif; vertical-align:super }
+  .w.ok::after { content:'✓'; content:'✓' / 'correct'; animation:pop .45s ease-out } .w.bad::after { content:'✗'; content:'✗' / 'missed' }
+  .result { text-align:center } .result h2 { margin:0 0 8px; font:800 32px/1.2 "Baloo 2", Nunito, sans-serif }
+  .stars { margin:0; font-size:64px; line-height:1; letter-spacing:8px; color:var(--sun) } .stars span { color:var(--line) }
+  .practice { justify-content:center } .practice button { font:700 26px Andika, Nunito, sans-serif }
+  .confetti { position:absolute; inset:0; pointer-events:none } .confetti span { position:absolute; top:-48px; font-size:32px; animation:fall 2.6s ease-in forwards }
+  @keyframes breathe { 50% { transform:scale(1.05) } } @keyframes hop { 50% { transform:translateY(-5px) } }
+  @keyframes fall { to { transform:translateY(700px) rotate(540deg); opacity:0 } }
+  @media (max-width:640px) { .controls > button { flex:1 1 140px } .stage { margin:16px 0; padding:16px } button.go { width:100% } .hint { font-size:20px } }
+  @media (prefers-reduced-motion: reduce) { .controls .rec, button.go, .w.next, .w.ok::after { animation:none } .confetti { display:none } }
   /* login */
   .pw { position:relative } .pw input { width:100%; padding-right:52px }
   .auth .pw button { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:44px; min-height:40px; padding:0; display:grid; place-items:center; border:0; background:none; box-shadow:none; color:var(--muted) }

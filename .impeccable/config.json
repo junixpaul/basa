@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-17T06:03:00.156Z",
+        "reason": "Claude triage: .controls .rec dot only renders inside the Stop button while the microphone is actively recording; genuinely live state, disabled under prefers-reduced-motion"
+      }
+    ]
+  }
+}

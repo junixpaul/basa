@@ -34,3 +34,7 @@ test('listen ends after a long pause once reading started (last word misheard)',
     assert.equal(await heard, 'ang')
   } finally { mock.timers.reset(); delete globalThis.SpeechRecognition }
 })
+test('prefers a warm teacher voice within the language', () => {
+  const vs = [{ lang: 'en-US', name: 'Microsoft David' }, { lang: 'en-US', name: 'Microsoft Jenny Online (Natural)' }, { lang: 'en-US', name: 'Samantha' }]
+  assert.equal(pickVoice(vs, 'en-US').voice.name, 'Microsoft Jenny Online (Natural)')
+})
