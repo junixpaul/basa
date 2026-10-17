@@ -35,7 +35,8 @@ export async function flush() {
       // anything else (no signal, server hiccup) keeps it for the next try
       if (error && !(error.code === '42501' || /^2[23]/.test(error.code ?? ''))) break
       if (error) console.warn('Dropped a saved reading the server rejected:', error.message, q[0])
-      write(read().slice(1))
+      // remove this exact reading, not "the first one": another tab may have flushed it already (the server skips repeats)
+      write(read().filter(r => r.p_at !== q[0].p_at || r.p_student !== q[0].p_student))
     }
   } finally { flushing = false }
 }

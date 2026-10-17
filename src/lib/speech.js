@@ -4,21 +4,28 @@ import { CEB_TTS_MODEL } from '../../config.js'
 const base = l => l.replace('_', '-').toLowerCase().split('-')[0]
 const same = (a, b) => a.replace('_', '-').toLowerCase() === b.toLowerCase()
 
-// Best voice for lang: exact → same language → Filipino/Tagalog → browser default.
+// Warm, clear female voices that sound like a friendly kids' teacher, best first (Edge, Chrome, macOS/iOS, Windows, Android).
+// calibration knob: put the voice the class likes best at the front.
+const WARM = ['Jenny', 'Aria', 'Ana', 'Samantha', 'Google US English', 'Karen', 'Tessa', 'Moira', 'Zira', 'Female']
+const rank = v => { const i = WARM.findIndex(n => v.name.includes(n)); return (i < 0 ? WARM.length : i) - (/natural|online|enhanced|premium/i.test(v.name) ? 0.5 : 0) }
+const warmest = list => list.sort((a, b) => rank(a) - rank(b))[0]
+
+// Best voice for lang: exact → same language → Filipino/Tagalog → browser default; the warmest voice within each.
 export function pickVoice(voices, lang) {
-  const exact = voices.find(v => same(v.lang, lang))
+  const exact = warmest(voices.filter(v => same(v.lang, lang)))
   if (exact) return { voice: exact, fallback: false }
-  const b = voices.find(v => base(v.lang) === base(lang))
+  const b = warmest(voices.filter(v => base(v.lang) === base(lang)))
   if (b) return { voice: b, fallback: false }
-  return { voice: voices.find(v => ['fil', 'tl'].includes(base(v.lang))) ?? null, fallback: true }
+  return { voice: warmest(voices.filter(v => ['fil', 'tl'].includes(base(v.lang)))) ?? null, fallback: true }
 }
 
-export function speak(text, lang) {
+export function speak(text, lang, rate = 0.85) {
   const u = new SpeechSynthesisUtterance(text)
   const { voice, fallback } = pickVoice(speechSynthesis.getVoices(), lang)
   if (voice) u.voice = voice
   u.lang = voice?.lang ?? lang
-  u.rate = 0.85
+  u.rate = rate
+  u.pitch = 1.2 // calibration knob: a little brighter, like a cheerful teacher (1 = normal, 2 = max)
   speechSynthesis.cancel()
   speechSynthesis.speak(u)
   return { fallback, ended: new Promise(r => { u.onend = u.onerror = r }) }
